@@ -177,12 +177,22 @@ app.post('/api/stt', upload.single('audio'), async (req, res) => {
 });
 
 // Chat completion endpoint - Using fine-tuned UPSC interview model
+// Chat completion endpoint - Using fine-tuned UPSC interview model
 app.post('/api/chat', async (req, res) => {
     try {
         const { messages, sessionId } = req.body;
         
         // Get session to track conversation state
-        let conversationState = {};
+        let conversationState = {
+            hasGreeted: false,
+            askedIntroduction: false,
+            questionCount: 0,
+            topicsDiscussed: [],
+            currentTopic: null,
+            questionsOnCurrentTopic: 0,
+            shouldConclude: false
+        };
+        
         if (sessionId && sessions.has(sessionId)) {
             const session = sessions.get(sessionId);
             if (!session.conversationState) {

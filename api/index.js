@@ -36,10 +36,22 @@ module.exports = async (req, res) => {
         return;
     }
 
-    // Get the path - Vercel passes full URL in req.url
-    const path = req.url.split('?')[0]; // Remove query params
+    // Get the path - normalize it for Vercel
+    let path = req.url.split('?')[0];
+    if (!path.startsWith('/api')) {
+        path = '/api' + path;
+    }
     
-    console.log('📍 Request:', req.method, path);
+    console.log('📍 Request:', req.method, path, 'Original:', req.url);
+
+    // Validate environment variables
+    if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY) {
+        console.error('❌ Missing API keys in environment');
+        return res.status(500).json({ 
+            error: 'Server configuration error',
+            details: 'API keys not found'
+        });
+    }
 
     try {
         // ============ SESSION INIT ============
@@ -170,7 +182,16 @@ module.exports = async (req, res) => {
             const { messages, sessionId } = req.body;
             
             // Get session to track conversation state
-            let conversationState = {};
+            let conversationState = {
+                hasGreeted: false,
+                askedIntroduction: false,
+                questionCount: 0,
+                topicsDiscussed: [],
+                currentTopic: null,
+                questionsOnCurrentTopic: 0,
+                shouldConclude: false
+            };
+            
             if (sessionId && sessions.has(sessionId)) {
                 const session = sessions.get(sessionId);
                 if (!session.conversationState) {

@@ -536,6 +536,9 @@
     <div id="snackbar"></div>
 
     <script>
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000' 
+            : window.location.origin;
         const SYSTEM_PROMPT_BASE = `You are a Senior UPSC Interview Board Member at Dholpur House conducting Tanya Singh's personality test interview.
 
 YOUR ROLE: You are the INTERVIEWER asking questions. Tanya is the CANDIDATE answering.
@@ -809,7 +812,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                 testStream.getTracks().forEach(track => track.stop());
                 
                 // Initialize session
-                const sessionResponse = await fetch('/api/session/init', {
+                const sessionResponse = await fetch('https://upsc-interviewer-ahna.vercel.app/api/session/init', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -863,7 +866,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
             updateStatus('Generating performance report...');
             
             try {
-                const reportResponse = await fetch('/api/session/report', {
+                const reportResponse = await fetch(API_BASE + '/api/session/report', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -911,7 +914,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
             
             // Delete session data (no metrics needed)
             if (AppState.interview.sessionId) {
-                fetch('/api/session/delete', {
+                fetch(API_BASE + '/api/session/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId: AppState.interview.sessionId })
@@ -972,7 +975,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                 const abortController = new AbortController();
                 AppState.audio.currentAbortController = abortController;
                 
-                const response = await fetch('/api/tts', {
+                const response = await fetch(API_BASE + '/api/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text }),
@@ -1219,7 +1222,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'audio.webm');
 
-                const transcriptionResponse = await fetch('/api/stt', {
+                const transcriptionResponse = await fetch(API_BASE + '/api/stt', {
                     method: 'POST',
                     body: formData,
                     signal: AbortSignal.timeout(15000)
@@ -1239,7 +1242,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
 
                 // Track metrics
                 if (AppState.interview.sessionId) {
-                    fetch('/api/session/track', {
+                    fetch(API_BASE + '/api/session/track', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1291,7 +1294,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                     ...AppState.interview.conversationHistory
                 ];
 
-                const response = await fetch('/api/chat', {
+                const response = await fetch(API_BASE + '/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 

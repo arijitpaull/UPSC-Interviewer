@@ -12,7 +12,31 @@
     ],
     "routes": [
       {
-        "src": "/api/(.*)",
+        "src": "/api/session/init",
+        "dest": "/api/index.js"
+      },
+      {
+        "src": "/api/session/track",
+        "dest": "/api/index.js"
+      },
+      {
+        "src": "/api/session/report",
+        "dest": "/api/index.js"
+      },
+      {
+        "src": "/api/session/delete",
+        "dest": "/api/index.js"
+      },
+      {
+        "src": "/api/tts",
+        "dest": "/api/index.js"
+      },
+      {
+        "src": "/api/stt",
+        "dest": "/api/index.js"
+      },
+      {
+        "src": "/api/chat",
         "dest": "/api/index.js"
       },
       {
@@ -20,4 +44,4 @@
         "dest": "/public/$1"
       }
     ]
-  }
+}
