@@ -10,6 +10,14 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const INDIAN_VOICE_ID = '43EwOfIMJShg3J9RLxZJ';
 
+// Validate API keys on cold start
+if (!OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY not found! Add it in Vercel environment variables.');
+}
+if (!ELEVENLABS_API_KEY) {
+    console.error('❌ ELEVENLABS_API_KEY not found! Add it in Vercel environment variables.');
+}
+
 // In-memory session storage
 const sessions = new Map();
 
@@ -28,7 +36,10 @@ module.exports = async (req, res) => {
         return;
     }
 
-    const path = req.url;
+    // Get the path - Vercel passes full URL in req.url
+    const path = req.url.split('?')[0]; // Remove query params
+    
+    console.log('📍 Request:', req.method, path);
 
     try {
         // ============ SESSION INIT ============
@@ -408,8 +419,13 @@ CRITICAL:
 
             if (!response.ok) {
                 const error = await response.text();
-                console.error('Chat API error:', response.status, error);
-                throw new Error(`Chat API error: ${response.status}`);
+                console.error('❌ Chat API error:', response.status, error);
+                console.error('API Key present:', !!OPENAI_API_KEY);
+                console.error('API Key prefix:', OPENAI_API_KEY?.substring(0, 10));
+                return res.status(500).json({ 
+                    error: `Chat API error: ${response.status}`,
+                    details: error
+                });
             }
 
             const data = await response.json();
@@ -582,10 +598,11 @@ Format as JSON:
         }
 
         // Not found
-        res.status(404).json({ error: 'Not found' });
+        console.log('❌ 404 - Path not matched:', path);
+        res.status(404).json({ error: 'Not found', path: path, method: req.method });
 
     } catch (error) {
-        console.error('API Error:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ API Error:', error);
+        res.status(500).json({ error: error.message, stack: error.stack });
     }
 };
