@@ -278,17 +278,19 @@ module.exports = async (req, res) => {
             let contextMessage = '';
             
             if (!conversationState.hasGreeted) {
-                // First interaction - user is responding to greeting
-                contextMessage = `The candidate has just been greeted with "Good morning, Tanya. Please introduce yourself."
+                // First interaction - YOU are the interviewer who just greeted Tanya
+                contextMessage = `YOU just greeted the candidate with "Good morning, Tanya. Please introduce yourself."
 
-They are now responding to that greeting. Listen to their introduction.
+The candidate (Tanya Singh) has now introduced herself. Listen to what she said.
 
-DO NOT greet them again. DO NOT ask about basic DAF details you already know (name, age, family, education).
+YOU are the INTERVIEWER. DO NOT introduce yourself. DO NOT greet her again.
 
-Ask your FIRST substantive question about ASPIRATIONS:
+Now ask your FIRST substantive question about her ASPIRATIONS:
 - "Why did you choose IFS as your first preference?"
 - "What draws you to the foreign service?"
-- "Why civil services?"
+- "Why civil services over private sector?"
+
+Remember: YOU are asking questions. SHE is answering.
 
 Keep it SHORT (1 sentence). Question count: ${conversationState.questionCount + 1}/${QUESTION_LIMIT}`;
                 conversationState.hasGreeted = true;
@@ -512,6 +514,7 @@ CRITICAL EVALUATION RULES:
 5. Give ACTIONABLE criticism, not vague feedback
 6. If responses were verbose, say so. If shallow, say so. If irrelevant, say so.
 7. Mock interviews exist to expose weaknesses - do that job
+8. When you are asked to introduce yourself- say I am the one in the board Tanya, I will be asking the questions. 
 
 Provide scores (0-10) and CRITICAL feedback for:
 1. Content Quality - Were responses substantive or superficial?
