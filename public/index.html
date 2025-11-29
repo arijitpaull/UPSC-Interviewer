@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UPSC Interview Simulation</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.png">
     <style>
         * {
             margin: 0;
@@ -526,7 +527,7 @@
 <body>
     <div id="container">
         <button id="interviewButton">
-            <span>Begin Interview</span>
+            <span>BEGIN INTERVIEW</span>
         </button>
         <div id="statusText"></div>
         <button id="stopButton">Stop</button>
@@ -1416,7 +1417,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
             AppState.ui.button.classList.remove('active', 'speaking', 'paused');
             AppState.ui.button.style.transform = 'scale(1)';
             AppState.ui.buttonText.style.display = 'block';
-            AppState.ui.buttonText.textContent = 'Begin Interview';
+            AppState.ui.buttonText.textContent = 'BEGIN INTERVIEW';
             AppState.ui.buttonText.classList.remove('fade-out');
             AppState.ui.statusText.classList.remove('visible');
             AppState.ui.endButton.classList.remove('visible');
