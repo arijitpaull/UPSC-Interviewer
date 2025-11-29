@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UPSC Interview Simulation</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.png">
+
     <style>
         * {
             margin: 0;
@@ -537,9 +537,9 @@
     <div id="snackbar"></div>
 
     <script>
-        const API_BASE = window.location.hostname === 'localhost' 
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:3000' 
-            : window.location.origin;
+            : '';
         const SYSTEM_PROMPT_BASE = `You are a Senior UPSC Interview Board Member at Dholpur House conducting Tanya Singh's personality test interview.
 
 YOUR ROLE: You are the INTERVIEWER asking questions. Tanya is the CANDIDATE answering.
@@ -813,7 +813,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                 testStream.getTracks().forEach(track => track.stop());
                 
                 // Initialize session
-                const sessionResponse = await fetch('https://upsc-interviewer-ahna.vercel.app/api/session/init', {
+                const sessionResponse = await fetch(API_BASE + '/api/session/init', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
