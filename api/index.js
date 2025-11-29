@@ -1,4 +1,6 @@
-// Vercel Serverless Function Handler - Complete UPSC Interview Bot
+// Vercel Serverless Function Handler - UPSC Interview Bot
+// BOT = INTERVIEWER (Board Member) | USER = TANYA SINGH (Candidate)
+
 const FormData = require('form-data');
 const fetch = require('node-fetch');
 const multer = require('multer');
@@ -6,16 +8,16 @@ const multer = require('multer');
 // Environment variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const INDIAN_VOICE_ID = '43EwOfIMJShg3J9RLxZJ'; // ElevenLabs Indian voice
+const INDIAN_VOICE_ID = '43EwOfIMJShg3J9RLxZJ';
 
-// In-memory session storage (will reset on cold starts - acceptable for mock interviews)
+// In-memory session storage
 const sessions = new Map();
 
-// Multer setup for file uploads
+// Multer setup
 const upload = multer({ storage: multer.memoryStorage() });
 
 module.exports = async (req, res) => {
-    // Enable CORS
+    // CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -26,7 +28,6 @@ module.exports = async (req, res) => {
         return;
     }
 
-    // Route handling
     const path = req.url;
 
     try {
@@ -35,9 +36,15 @@ module.exports = async (req, res) => {
             const sessionId = Date.now().toString();
             
             const allInterests = [
-                'development economics', 'education policy', 'diplomacy and foreign service',
-                'leadership psychology', 'Delhi governance', 'dystopian literature',
-                'cue sports and pool', 'social entrepreneurship', 'debating and Model UN',
+                'development economics',
+                'education policy', 
+                'diplomacy and foreign service',
+                'leadership psychology',
+                'Delhi governance',
+                'dystopian literature',
+                'cue sports and pool',
+                'social entrepreneurship',
+                'debating and Model UN',
                 'ethics and philosophy'
             ];
             
@@ -61,7 +68,10 @@ module.exports = async (req, res) => {
                 }
             });
             
-            return res.status(200).json({ sessionId, interests: sessionInterests });
+            return res.status(200).json({ 
+                sessionId,
+                interests: sessionInterests
+            });
         }
 
         // ============ TTS ENDPOINT ============
@@ -77,7 +87,7 @@ module.exports = async (req, res) => {
                 },
                 body: JSON.stringify({
                     text: text,
-                    model_id: 'eleven_flash_v2_5', // 75ms latency
+                    model_id: 'eleven_flash_v2_5',
                     voice_settings: {
                         stability: 0.6,
                         similarity_boost: 0.8,
@@ -127,6 +137,8 @@ module.exports = async (req, res) => {
                         });
 
                         if (!response.ok) {
+                            const error = await response.text();
+                            console.error('STT API error:', response.status, error);
                             throw new Error(`STT API error: ${response.status}`);
                         }
 
@@ -146,6 +158,7 @@ module.exports = async (req, res) => {
         if (path === '/api/chat' && req.method === 'POST') {
             const { messages, sessionId } = req.body;
             
+            // Get session to track conversation state
             let conversationState = {};
             if (sessionId && sessions.has(sessionId)) {
                 const session = sessions.get(sessionId);
@@ -163,16 +176,20 @@ module.exports = async (req, res) => {
                 conversationState = session.conversationState;
             }
             
-            const QUESTION_LIMIT = 70; // 60-70 questions (~15-20 minutes)
-            const QUESTIONS_PER_TOPIC = 10; // Switch topics every 10 questions
+            // INTERVIEW LIMIT: 60-70 questions (about 15-20 minutes)
+            const QUESTION_LIMIT = 70; // Increased from 25 to 70
+            const QUESTIONS_PER_TOPIC = 10; // Switch topics after ~10 questions
             
-            // Check if interview should conclude
+            // Check if we should conclude the interview
             if (conversationState.questionCount >= QUESTION_LIMIT) {
                 conversationState.shouldConclude = true;
+                
+                // Update session before concluding
                 if (sessionId && sessions.has(sessionId)) {
                     sessions.get(sessionId).conversationState = conversationState;
                 }
                 
+                // Return conclusion message
                 return res.status(200).json({
                     choices: [{
                         message: {
@@ -186,35 +203,50 @@ module.exports = async (req, res) => {
             
             // Define topic rotation
             const TOPICS = [
-                'aspirations', 'international_relations', 'economics', 'literature_philosophy',
-                'social_issues', 'administration', 'ethics', 'current_affairs_india',
-                'extracurriculars', 'personal_background'
+                'aspirations', // Why civil services, IFS preference
+                'international_relations', // Current affairs - wars, conflicts, diplomacy
+                'economics', // Optional subject, debt, inflation, pink tax
+                'literature_philosophy', // Absurdist literature, dystopian themes
+                'social_issues', // Mental health, education, volunteering
+                'administration', // Situational questions, policy implementation
+                'ethics', // Ethical dilemmas, difficult choices
+                'current_affairs_india', // Delhi governance, domestic issues
+                'extracurriculars', // ARTIBUS, MUN, debate, pool
+                'personal_background' // Growing up in East Delhi, challenges faced
             ];
             
-            // Switch topics after 10 questions
+            // Check if we need to switch topics
             if (conversationState.questionsOnCurrentTopic >= QUESTIONS_PER_TOPIC) {
+                // Time to switch topic
                 conversationState.questionsOnCurrentTopic = 0;
+                
+                // Find a topic we haven't exhausted yet
                 const availableTopics = TOPICS.filter(t => {
                     const timesAsked = conversationState.topicsDiscussed.filter(asked => asked === t).length;
-                    return timesAsked < 2; // Max 2 rotations per topic
+                    return timesAsked < 2; // Allow each topic max 2 rotations
                 });
                 
                 if (availableTopics.length > 0) {
+                    // Pick a random new topic
                     conversationState.currentTopic = availableTopics[Math.floor(Math.random() * availableTopics.length)];
                 } else {
+                    // All topics exhausted, cycle through randomly
                     conversationState.currentTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
                 }
             }
             
+            // Track topic
             if (!conversationState.currentTopic) {
-                conversationState.currentTopic = 'aspirations';
+                conversationState.currentTopic = 'aspirations'; // Start with aspirations
             }
             conversationState.topicsDiscussed.push(conversationState.currentTopic);
             conversationState.questionsOnCurrentTopic++;
             
+            // Build context-aware system message based on current topic and progress
             let contextMessage = '';
             
             if (!conversationState.hasGreeted) {
+                // First interaction - user is responding to greeting
                 contextMessage = `The candidate has just been greeted with "Good morning, Tanya. Please introduce yourself."
 
 They are now responding to that greeting. Listen to their introduction.
@@ -230,7 +262,7 @@ Keep it SHORT (1 sentence). Question count: ${conversationState.questionCount + 
                 conversationState.hasGreeted = true;
                 conversationState.askedIntroduction = true;
             } else {
-                // Topic-specific guidance
+                // Generate topic-specific questions based on current topic
                 const topicGuidance = {
                     aspirations: `Topic: ASPIRATIONS & MOTIVATION
 Ask about:
@@ -345,16 +377,19 @@ CRITICAL:
             
             conversationState.questionCount++;
             
+            // Update session
             if (sessionId && sessions.has(sessionId)) {
                 sessions.get(sessionId).conversationState = conversationState;
             }
             
+            // Prepare messages for fine-tuned model
             const modelMessages = [
-                ...messages.slice(0, 1),
-                { role: 'system', content: contextMessage },
-                ...messages.slice(1)
+                ...messages.slice(0, 1), // Keep original personality system message
+                { role: 'system', content: contextMessage }, // Add context
+                ...messages.slice(1) // Keep conversation history
             ];
             
+            // Use fine-tuned model: ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -362,9 +397,9 @@ CRITICAL:
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: 'ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk',
+                    model: 'ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk', // Fine-tuned UPSC model
                     messages: modelMessages,
-                    temperature: 0.8,
+                    temperature: 0.8, // Balanced for varied but focused questions
                     max_tokens: 150,
                     presence_penalty: 0.6,
                     frequency_penalty: 0.7
@@ -381,7 +416,7 @@ CRITICAL:
             return res.status(200).json(data);
         }
 
-        // ============ SESSION TRACK ============
+        // ============ TRACK METRICS ============
         if (path === '/api/session/track' && req.method === 'POST') {
             const { sessionId, metrics } = req.body;
             
@@ -396,16 +431,23 @@ CRITICAL:
             return res.status(200).json({ success: true });
         }
 
-        // ============ SESSION DELETE ============
+        // ============ DELETE SESSION ============
         if (path === '/api/session/delete' && req.method === 'POST') {
             const { sessionId } = req.body;
+            
+            if (!sessionId) {
+                return res.status(400).json({ error: 'Session ID required' });
+            }
+            
             if (sessions.has(sessionId)) {
                 sessions.delete(sessionId);
+                console.log(`Session ${sessionId} deleted (stopped without metrics)`);
             }
+            
             return res.status(200).json({ success: true });
         }
 
-        // ============ REPORT GENERATION ============
+        // ============ GENERATE REPORT ============
         if (path === '/api/session/report' && req.method === 'POST') {
             const { sessionId, conversationHistory } = req.body;
             
@@ -416,8 +458,8 @@ CRITICAL:
             const session = sessions.get(sessionId);
             const metrics = session.metrics;
             
-            // Use GPT-4o for critical analysis
-            const analysisPrompt = `You are a strict UPSC interview evaluator. Analyze this interview and provide BRUTALLY HONEST, CRITICAL feedback.
+            // Use GPT-4o to analyze the conversation critically
+            const analysisPrompt = `You are a strict UPSC interview evaluator. Analyze this interview and provide BRUTALLY HONEST, CRITICAL feedback. This is a mock interview - your job is to identify weaknesses so the candidate can improve.
 
 Conversation History:
 ${JSON.stringify(conversationHistory, null, 2)}
@@ -477,7 +519,7 @@ Format as JSON:
                             },
                             { role: 'user', content: analysisPrompt }
                         ],
-                        temperature: 0.3,
+                        temperature: 0.3, // Lower for more consistent, critical evaluation
                         max_tokens: 2000
                     })
                 });
@@ -495,7 +537,7 @@ Format as JSON:
                     analysis = JSON.parse(jsonText);
                 } catch (e) {
                     console.error('Failed to parse analysis JSON:', e);
-                    // Fallback critical feedback
+                    // Fallback to basic critical feedback
                     analysis = {
                         scores: {
                             content: { score: 6, feedback: "Responses need more depth. Provide specific examples and data to support claims. Too generic." },
@@ -504,7 +546,10 @@ Format as JSON:
                             knowledge: { score: 6, feedback: "Surface-level understanding evident. Study your optional subject more thoroughly." },
                             etiquette: { score: 7, feedback: "Professional but could be more engaged. Eye contact and body language matter." }
                         },
-                        strengths: ["Maintained professional demeanor", "Attempted to answer all questions"],
+                        strengths: [
+                            "Maintained professional demeanor",
+                            "Attempted to answer all questions"
+                        ],
                         improvements: [
                             "Responses lack specific examples - every answer needs concrete data/cases",
                             "Too verbose - practice 2-3 minute responses maximum",
