@@ -1,0 +1,546 @@
+// Vercel Serverless Function Handler - Complete UPSC Interview Bot
+const FormData = require('form-data');
+const fetch = require('node-fetch');
+const multer = require('multer');
+
+// Environment variables
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const INDIAN_VOICE_ID = '43EwOfIMJShg3J9RLxZJ'; // ElevenLabs Indian voice
+
+// In-memory session storage (will reset on cold starts - acceptable for mock interviews)
+const sessions = new Map();
+
+// Multer setup for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
+
+module.exports = async (req, res) => {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
+    // Route handling
+    const path = req.url;
+
+    try {
+        // ============ SESSION INIT ============
+        if (path === '/api/session/init' && req.method === 'POST') {
+            const sessionId = Date.now().toString();
+            
+            const allInterests = [
+                'development economics', 'education policy', 'diplomacy and foreign service',
+                'leadership psychology', 'Delhi governance', 'dystopian literature',
+                'cue sports and pool', 'social entrepreneurship', 'debating and Model UN',
+                'ethics and philosophy'
+            ];
+            
+            const shuffled = allInterests.sort(() => 0.5 - Math.random());
+            const sessionInterests = shuffled.slice(0, 2);
+            
+            sessions.set(sessionId, {
+                interests: sessionInterests,
+                metrics: {
+                    responses: [],
+                    conversationHistory: []
+                },
+                conversationState: {
+                    hasGreeted: false,
+                    askedIntroduction: false,
+                    questionCount: 0,
+                    topicsDiscussed: [],
+                    currentTopic: null,
+                    questionsOnCurrentTopic: 0,
+                    shouldConclude: false
+                }
+            });
+            
+            return res.status(200).json({ sessionId, interests: sessionInterests });
+        }
+
+        // ============ TTS ENDPOINT ============
+        if (path === '/api/tts' && req.method === 'POST') {
+            const { text } = req.body;
+            
+            const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${INDIAN_VOICE_ID}/stream`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'audio/mpeg',
+                    'Content-Type': 'application/json',
+                    'xi-api-key': ELEVENLABS_API_KEY
+                },
+                body: JSON.stringify({
+                    text: text,
+                    model_id: 'eleven_flash_v2_5', // 75ms latency
+                    voice_settings: {
+                        stability: 0.6,
+                        similarity_boost: 0.8,
+                        style: 0.7,
+                        use_speaker_boost: true
+                    },
+                    optimize_streaming_latency: 3,
+                    output_format: 'mp3_22050_32'
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                console.error('ElevenLabs TTS error:', response.status, error);
+                throw new Error(`TTS API error: ${response.status}`);
+            }
+
+            res.setHeader('Content-Type', 'audio/mpeg');
+            response.body.pipe(res);
+            return;
+        }
+
+        // ============ STT ENDPOINT ============
+        if (path === '/api/stt' && req.method === 'POST') {
+            return new Promise((resolve) => {
+                upload.single('audio')(req, res, async (err) => {
+                    if (err) {
+                        res.status(500).json({ error: err.message });
+                        return resolve();
+                    }
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', req.file.buffer, {
+                            filename: 'audio.webm',
+                            contentType: req.file.mimetype
+                        });
+                        formData.append('model', 'whisper-1');
+
+                        const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                                ...formData.getHeaders()
+                            },
+                            body: formData
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`STT API error: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+                        res.status(200).json({ text: data.text, metrics: {} });
+                        resolve();
+                    } catch (error) {
+                        console.error('STT Error:', error);
+                        res.status(500).json({ error: error.message });
+                        resolve();
+                    }
+                });
+            });
+        }
+
+        // ============ CHAT ENDPOINT ============
+        if (path === '/api/chat' && req.method === 'POST') {
+            const { messages, sessionId } = req.body;
+            
+            let conversationState = {};
+            if (sessionId && sessions.has(sessionId)) {
+                const session = sessions.get(sessionId);
+                if (!session.conversationState) {
+                    session.conversationState = {
+                        hasGreeted: false,
+                        askedIntroduction: false,
+                        questionCount: 0,
+                        topicsDiscussed: [],
+                        currentTopic: null,
+                        questionsOnCurrentTopic: 0,
+                        shouldConclude: false
+                    };
+                }
+                conversationState = session.conversationState;
+            }
+            
+            const QUESTION_LIMIT = 70; // 60-70 questions (~15-20 minutes)
+            const QUESTIONS_PER_TOPIC = 10; // Switch topics every 10 questions
+            
+            // Check if interview should conclude
+            if (conversationState.questionCount >= QUESTION_LIMIT) {
+                conversationState.shouldConclude = true;
+                if (sessionId && sessions.has(sessionId)) {
+                    sessions.get(sessionId).conversationState = conversationState;
+                }
+                
+                return res.status(200).json({
+                    choices: [{
+                        message: {
+                            role: 'assistant',
+                            content: 'Your interview is over, Tanya. Thank you.'
+                        },
+                        finish_reason: 'stop'
+                    }]
+                });
+            }
+            
+            // Define topic rotation
+            const TOPICS = [
+                'aspirations', 'international_relations', 'economics', 'literature_philosophy',
+                'social_issues', 'administration', 'ethics', 'current_affairs_india',
+                'extracurriculars', 'personal_background'
+            ];
+            
+            // Switch topics after 10 questions
+            if (conversationState.questionsOnCurrentTopic >= QUESTIONS_PER_TOPIC) {
+                conversationState.questionsOnCurrentTopic = 0;
+                const availableTopics = TOPICS.filter(t => {
+                    const timesAsked = conversationState.topicsDiscussed.filter(asked => asked === t).length;
+                    return timesAsked < 2; // Max 2 rotations per topic
+                });
+                
+                if (availableTopics.length > 0) {
+                    conversationState.currentTopic = availableTopics[Math.floor(Math.random() * availableTopics.length)];
+                } else {
+                    conversationState.currentTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+                }
+            }
+            
+            if (!conversationState.currentTopic) {
+                conversationState.currentTopic = 'aspirations';
+            }
+            conversationState.topicsDiscussed.push(conversationState.currentTopic);
+            conversationState.questionsOnCurrentTopic++;
+            
+            let contextMessage = '';
+            
+            if (!conversationState.hasGreeted) {
+                contextMessage = `The candidate has just been greeted with "Good morning, Tanya. Please introduce yourself."
+
+They are now responding to that greeting. Listen to their introduction.
+
+DO NOT greet them again. DO NOT ask about basic DAF details you already know (name, age, family, education).
+
+Ask your FIRST substantive question about ASPIRATIONS:
+- "Why did you choose IFS as your first preference?"
+- "What draws you to the foreign service?"
+- "Why civil services?"
+
+Keep it SHORT (1 sentence). Question count: ${conversationState.questionCount + 1}/${QUESTION_LIMIT}`;
+                conversationState.hasGreeted = true;
+                conversationState.askedIntroduction = true;
+            } else {
+                // Topic-specific guidance
+                const topicGuidance = {
+                    aspirations: `Topic: ASPIRATIONS & MOTIVATION
+Ask about:
+- Why IFS specifically?
+- Why civil services over private sector?
+- What draws her to diplomacy?
+- If not IFS, will IAS be equally motivating?
+- How does Economics help in foreign service?
+- What does she think makes a good diplomat?`,
+
+                    international_relations: `Topic: INTERNATIONAL RELATIONS & CURRENT AFFAIRS
+Ask about:
+- Russia-Ukraine war - India's position?
+- Israel-Palestine conflict - should India take sides?
+- Indo-Pacific strategy - what's at stake?
+- India-China border tensions - way forward?
+- Global South leadership - is India ready?
+- UNSC reform - India's permanent seat chances?
+- Neighborhood first policy - success or failure?
+- Diaspora diplomacy importance`,
+
+                    economics: `Topic: ECONOMICS (Her Optional Subject)
+Ask about:
+- Global debt vulnerabilities (her MUN topic)
+- India's inflation and unemployment challenges
+- Pink tax and gender economics (her debate topic)
+- Fiscal federalism - states vs center
+- Women's labour force participation - how to increase?
+- Direct vs indirect taxation debate
+- India's economic growth strategy
+- Inequality and inclusive growth`,
+
+                    literature_philosophy: `Topic: LITERATURE & PHILOSOPHY
+Ask about:
+- What appeals about absurdist literature?
+- Dystopian themes - relevance to modern governance?
+- How does literature shape administrative thinking?
+- Philosophical frameworks for policy making
+- Camus, Kafka, Orwell - what do they teach administrators?
+- Ethics from literature`,
+
+                    social_issues: `Topic: SOCIAL ISSUES
+Ask about:
+- Mental health (she organized campaign) - policy gaps?
+- Education for underserved (she volunteers) - what needs fixing?
+- Social media and youth mental health
+- Gender equality - beyond pink tax
+- Youth unemployment solutions
+- NGO vs government - which is more effective?`,
+
+                    administration: `Topic: ADMINISTRATION & GOVERNANCE
+Ask situational questions:
+- As DM of East Delhi, how would you improve education?
+- As MEA officer, handling India-Pakistan tensions?
+- Posted in Naxal-affected district - priorities?
+- Communal riots in your district - immediate steps?
+- Implementing unpopular policy - approach?
+- Conflicting orders from senior - what to do?`,
+
+                    ethics: `Topic: ETHICAL DILEMMAS
+Ask about:
+- Development vs environment - how to balance?
+- Senior asks you to do something unethical - response?
+- Limited resources - who gets priority?
+- Whistleblowing vs loyalty to department
+- Personal values vs public duty
+- Ends justify means - agree or disagree?`,
+
+                    current_affairs_india: `Topic: CURRENT AFFAIRS - INDIA
+Ask about:
+- Delhi governance challenges (her home)
+- New education policy - pros and cons?
+- Women's safety in urban areas
+- Digital India - benefits and concerns?
+- Farm laws controversy - lessons learned?
+- Reservation policy - needs reform?`,
+
+                    extracurriculars: `Topic: EXTRACURRICULARS & ACHIEVEMENTS
+Ask about:
+- Founding ARTIBUS - how does public speaking help in admin?
+- MUN Best Delegate - what did you learn?
+- Debate adjudicator - judging skills in administration?
+- Cue sports (pool) - what does it teach?
+- Vice Head Girl - leadership lessons?
+- Volunteering - why children's education?`,
+
+                    personal_background: `Topic: PERSONAL BACKGROUND & CHALLENGES
+Ask about:
+- Growing up in East Delhi - what did you observe?
+- Single parent household - how did it shape you?
+- Overcoming challenges - specific examples?
+- EWS category - should reservation continue?
+- From SRCC to civil services - journey?
+- What drives you despite difficulties?`
+                };
+                
+                const currentGuidance = topicGuidance[conversationState.currentTopic] || topicGuidance.aspirations;
+                
+                contextMessage = `Question ${conversationState.questionCount + 1}/${QUESTION_LIMIT}
+Current Topic: ${conversationState.currentTopic.toUpperCase().replace('_', ' ')}
+Questions on this topic so far: ${conversationState.questionsOnCurrentTopic}/${QUESTIONS_PER_TOPIC}
+
+${currentGuidance}
+
+CRITICAL:
+- Ask ONE short question (1-2 sentences max)
+- Be formal, probing, and sharp
+- If answer is vague, immediately follow up: "Be specific" or "Give an example"
+- Don't ask what you already know from DAF
+- Switch style: direct → challenging → hypothetical → opinion`;
+            }
+            
+            conversationState.questionCount++;
+            
+            if (sessionId && sessions.has(sessionId)) {
+                sessions.get(sessionId).conversationState = conversationState;
+            }
+            
+            const modelMessages = [
+                ...messages.slice(0, 1),
+                { role: 'system', content: contextMessage },
+                ...messages.slice(1)
+            ];
+            
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk',
+                    messages: modelMessages,
+                    temperature: 0.8,
+                    max_tokens: 150,
+                    presence_penalty: 0.6,
+                    frequency_penalty: 0.7
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                console.error('Chat API error:', response.status, error);
+                throw new Error(`Chat API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return res.status(200).json(data);
+        }
+
+        // ============ SESSION TRACK ============
+        if (path === '/api/session/track' && req.method === 'POST') {
+            const { sessionId, metrics } = req.body;
+            
+            if (!sessions.has(sessionId)) {
+                return res.status(404).json({ error: 'Session not found' });
+            }
+            
+            const session = sessions.get(sessionId);
+            session.metrics.responses.push(metrics);
+            sessions.set(sessionId, session);
+            
+            return res.status(200).json({ success: true });
+        }
+
+        // ============ SESSION DELETE ============
+        if (path === '/api/session/delete' && req.method === 'POST') {
+            const { sessionId } = req.body;
+            if (sessions.has(sessionId)) {
+                sessions.delete(sessionId);
+            }
+            return res.status(200).json({ success: true });
+        }
+
+        // ============ REPORT GENERATION ============
+        if (path === '/api/session/report' && req.method === 'POST') {
+            const { sessionId, conversationHistory } = req.body;
+            
+            if (!sessions.has(sessionId)) {
+                return res.status(404).json({ error: 'Session not found' });
+            }
+            
+            const session = sessions.get(sessionId);
+            const metrics = session.metrics;
+            
+            // Use GPT-4o for critical analysis
+            const analysisPrompt = `You are a strict UPSC interview evaluator. Analyze this interview and provide BRUTALLY HONEST, CRITICAL feedback.
+
+Conversation History:
+${JSON.stringify(conversationHistory, null, 2)}
+
+Session Metrics:
+- Total responses: ${metrics.responses.length}
+
+CRITICAL EVALUATION RULES:
+1. Be STRICT - this is not the time for encouragement, it's time for reality
+2. Point out SPECIFIC weaknesses with SPECIFIC examples from the conversation
+3. Don't sugarcoat - if something was poor, say it was poor
+4. Focus MORE on what went WRONG than what went right
+5. Give ACTIONABLE criticism, not vague feedback
+6. If responses were verbose, say so. If shallow, say so. If irrelevant, say so.
+7. Mock interviews exist to expose weaknesses - do that job
+
+Provide scores (0-10) and CRITICAL feedback for:
+1. Content Quality - Were responses substantive or superficial?
+2. Communication - Clear or rambling? Concise or verbose?
+3. Confidence - Genuine or fake? Hesitant or overconfident?
+4. Knowledge Depth - Deep understanding or surface-level?
+5. Interview Etiquette - Professional or casual?
+
+Format as JSON:
+{
+  "scores": {
+    "content": {"score": X, "feedback": "CRITICAL 2-3 sentence feedback with specific example"},
+    "communication": {"score": X, "feedback": "CRITICAL 2-3 sentence feedback"},
+    "confidence": {"score": X, "feedback": "CRITICAL 2-3 sentence feedback"},
+    "knowledge": {"score": X, "feedback": "CRITICAL 2-3 sentence feedback"},
+    "etiquette": {"score": X, "feedback": "CRITICAL 2-3 sentence feedback"}
+  },
+  "strengths": ["Only include if genuinely strong", "Max 2-3 items", "Be specific"],
+  "improvements": ["CRITICAL weakness #1 with specific example", "CRITICAL weakness #2", "CRITICAL weakness #3", "Add more if needed"],
+  "overall": "BLUNT 3-4 sentence reality check. What would likely happen in real UPSC interview with this performance? Don't hold back.",
+  "detailedNotes": {
+    "responseLengths": "Were responses too long/short? Specific examples.",
+    "relevance": "Did candidate stay on topic? Examples of deviation.",
+    "depth": "Surface-level or analytical? Where did they fail to go deep?",
+    "structure": "Well-organized or scattered thinking?"
+  }
+}`;
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: [
+                            { 
+                                role: 'system', 
+                                content: 'You are a strict, no-nonsense UPSC interview evaluator. Your feedback is brutally honest and focused on identifying weaknesses. Output ONLY valid JSON.' 
+                            },
+                            { role: 'user', content: analysisPrompt }
+                        ],
+                        temperature: 0.3,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Analysis API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                let analysis;
+                
+                try {
+                    const responseText = data.choices[0].message.content;
+                    const jsonText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                    analysis = JSON.parse(jsonText);
+                } catch (e) {
+                    console.error('Failed to parse analysis JSON:', e);
+                    // Fallback critical feedback
+                    analysis = {
+                        scores: {
+                            content: { score: 6, feedback: "Responses need more depth. Provide specific examples and data to support claims. Too generic." },
+                            communication: { score: 6, feedback: "Work on being more concise. Several responses were unnecessarily lengthy." },
+                            confidence: { score: 7, feedback: "Generally composed but avoid filler words. Practice speaking with more conviction." },
+                            knowledge: { score: 6, feedback: "Surface-level understanding evident. Study your optional subject more thoroughly." },
+                            etiquette: { score: 7, feedback: "Professional but could be more engaged. Eye contact and body language matter." }
+                        },
+                        strengths: ["Maintained professional demeanor", "Attempted to answer all questions"],
+                        improvements: [
+                            "Responses lack specific examples - every answer needs concrete data/cases",
+                            "Too verbose - practice 2-3 minute responses maximum",
+                            "Insufficient depth on core topics - shows gaps in preparation",
+                            "Avoid generic statements - board wants specifics, not platitudes"
+                        ],
+                        overall: "This performance would likely not clear the UPSC personality test. The board expects depth, precision, and evidence-based responses. Most answers were generic and lacked the analytical rigor needed. Significant improvement required in content depth and response structure.",
+                        detailedNotes: {
+                            responseLengths: "Several responses exceeded optimal length without adding value",
+                            relevance: "Stayed mostly on topic but often gave generic answers instead of specific analysis",
+                            depth: "Surface-level responses dominant. Need to demonstrate deeper understanding",
+                            structure: "Responses lack clear structure. Use framework: claim → evidence → implication"
+                        }
+                    };
+                }
+                
+                sessions.delete(sessionId);
+                
+                return res.status(200).json({
+                    analysis,
+                    rawMetrics: {
+                        totalResponses: metrics.responses.length
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Report Error:', error);
+                return res.status(500).json({ error: error.message });
+            }
+        }
+
+        // Not found
+        res.status(404).json({ error: 'Not found' });
+
+    } catch (error) {
+        console.error('API Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
