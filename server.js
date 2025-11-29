@@ -8,13 +8,20 @@ const multer = require('multer');
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-const API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const PORT = process.env.PORT || 3000;
 
-// Validate API key exists
-if (!API_KEY) {
+// Validate API keys exist
+if (!OPENAI_API_KEY) {
     console.error('ERROR: OPENAI_API_KEY not found in environment variables!');
     console.error('Please create a .env file with your API key.');
+    process.exit(1);
+}
+
+if (!ELEVENLABS_API_KEY) {
+    console.error('ERROR: ELEVENLABS_API_KEY not found in environment variables!');
+    console.error('Please add ELEVENLABS_API_KEY to your .env file.');
     process.exit(1);
 }
 
@@ -25,34 +32,111 @@ app.use(express.static('public'));
 // Session storage for metrics
 const sessions = new Map();
 
-// Text-to-speech endpoint with natural voice
+// Endpoint to fetch available Indian accent voices from ElevenLabs
+app.get('/api/voices/indian', async (req, res) => {
+    try {
+        const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+            method: 'GET',
+            headers: {
+                'xi-api-key': ELEVENLABS_API_KEY
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch voices: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Filter for Indian/Hindi accent voices
+        const indianVoices = data.voices.filter(voice => {
+            const name = voice.name.toLowerCase();
+            const labels = voice.labels || {};
+            const accent = (labels.accent || '').toLowerCase();
+            const description = (voice.description || '').toLowerCase();
+            
+            return (
+                accent.includes('indian') || 
+                accent.includes('hindi') ||
+                name.includes('indian') ||
+                name.includes('hindi') ||
+                description.includes('indian') ||
+                description.includes('hindi')
+            );
+        });
+
+        res.json({
+            total: indianVoices.length,
+            voices: indianVoices.map(v => ({
+                voice_id: v.voice_id,
+                name: v.name,
+                labels: v.labels,
+                description: v.description,
+                preview_url: v.preview_url
+            }))
+        });
+        
+    } catch (error) {
+        console.error('Error fetching voices:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ElevenLabs Voice ID for Indian accent male voice
+// Based on Voice Library research - using professional Indian male voices
+// Top choices for UPSC interviewer (formal, authoritative, Indian accent):
+// 1. "Vihan Ahuja" - Dramatic, clear Hindi/English voice (most popular)
+// 2. "Aakash Aryan" - Famous Indian AI voice, conversational bass
+// 3. "Ahmed J" - Professional warm Indian voice
+// 4. "Viraj" - Helpful customer service voice, neutral Indian accent
+
+// USER SELECTED VOICE - Indian accent male voice from Voice Library
+// Voice ID: 43EwOfIMJShg3J9RLxZJ
+// Voice Link: https://elevenlabs.io/app/voice-library?voiceId=oH8YmZXJYEZq5ScgoGn9
+const INDIAN_VOICE_ID = '43EwOfIMJShg3J9RLxZJ'; // User-selected Indian voice ⭐
+
+// Alternative voices (backup):
+// const INDIAN_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam - professional male voice
+// const INDIAN_VOICE_ID = 'ErXwobaYiN019PkySvjV'; // Antoni - deep authoritative voice
+
+// Text-to-speech endpoint with ElevenLabs streaming for ultra-low latency
 app.post('/api/tts', async (req, res) => {
     try {
         const { text } = req.body;
         
-        const response = await fetch('https://api.openai.com/v1/audio/speech', {
+        // ElevenLabs streaming TTS API
+        // Using eleven_flash_v2_5 for 75ms latency + natural Indian accent
+        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${INDIAN_VOICE_ID}/stream`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${API_KEY}`,
-                'Content-Type': 'application/json'
+                'Accept': 'audio/mpeg',
+                'Content-Type': 'application/json',
+                'xi-api-key': ELEVENLABS_API_KEY
             },
             body: JSON.stringify({
-                model: 'tts-1-hd',
-                voice: 'onyx', // Deep, authoritative voice - closer to Indian English male interviewer
-                input: text,
-                speed: 0.85 // Slightly slower for more formal, measured Indian English cadence
+                text: text,
+                model_id: 'eleven_flash_v2_5', // Fastest model - 75ms latency, supports 32 languages
+                voice_settings: {
+                    stability: 0.6, // Slightly lower for more natural variation (was 0.7)
+                    similarity_boost: 0.8, // High similarity for consistent voice
+                    style: 0.7, // Higher style for MORE EMOTION and modulation (was 0.4)
+                    use_speaker_boost: true // Enhanced clarity
+                },
+                optimize_streaming_latency: 3, // Max latency optimization
+                output_format: 'mp3_22050_32' // Optimized for speed and quality
             })
         });
 
         if (!response.ok) {
             const error = await response.text();
-            console.error('TTS API error:', response.status, error);
+            console.error('ElevenLabs TTS API error:', response.status, error);
             throw new Error(`TTS API error: ${response.status}`);
         }
 
-        const buffer = await response.buffer();
+        // Stream the audio directly to client
         res.set('Content-Type', 'audio/mpeg');
-        res.send(buffer);
+        response.body.pipe(res);
+        
     } catch (error) {
         console.error('TTS Error:', error);
         res.status(500).json({ error: error.message });
@@ -72,7 +156,7 @@ app.post('/api/stt', upload.single('audio'), async (req, res) => {
         const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${API_KEY}`,
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
                 ...formData.getHeaders()
             },
             body: formData
@@ -92,7 +176,7 @@ app.post('/api/stt', upload.single('audio'), async (req, res) => {
     }
 });
 
-// Chat completion endpoint
+// Chat completion endpoint - Using fine-tuned UPSC interview model
 app.post('/api/chat', async (req, res) => {
     try {
         const { messages, sessionId } = req.body;
@@ -105,61 +189,213 @@ app.post('/api/chat', async (req, res) => {
                 session.conversationState = {
                     hasGreeted: false,
                     askedIntroduction: false,
-                    askedWhyCivilServices: false,
                     questionCount: 0,
-                    topicsDiscussed: []
+                    topicsDiscussed: [],
+                    currentTopic: null,
+                    questionsOnCurrentTopic: 0,
+                    shouldConclude: false
                 };
             }
             conversationState = session.conversationState;
         }
         
-        // Build enhanced system message based on conversation state
-        let enhancedSystemMessage = '';
+        // INTERVIEW LIMIT: 60-70 questions (about 15-20 minutes)
+        const QUESTION_LIMIT = 70; // Increased from 25 to 70
+        const QUESTIONS_PER_TOPIC = 10; // Switch topics after ~10 questions
+        
+        // Check if we should conclude the interview
+        if (conversationState.questionCount >= QUESTION_LIMIT) {
+            conversationState.shouldConclude = true;
+            
+            // Update session before concluding
+            if (sessionId && sessions.has(sessionId)) {
+                sessions.get(sessionId).conversationState = conversationState;
+            }
+            
+            // Return conclusion message
+            return res.json({
+                choices: [{
+                    message: {
+                        role: 'assistant',
+                        content: 'Your interview is over, Tanya. Thank you.'
+                    },
+                    finish_reason: 'stop'
+                }]
+            });
+        }
+        
+        // Define topic rotation
+        const TOPICS = [
+            'aspirations', // Why civil services, IFS preference
+            'international_relations', // Current affairs - wars, conflicts, diplomacy
+            'economics', // Optional subject, debt, inflation, pink tax
+            'literature_philosophy', // Absurdist literature, dystopian themes
+            'social_issues', // Mental health, education, volunteering
+            'administration', // Situational questions, policy implementation
+            'ethics', // Ethical dilemmas, difficult choices
+            'current_affairs_india', // Delhi governance, domestic issues
+            'extracurriculars', // ARTIBUS, MUN, debate, pool
+            'personal_background' // Growing up in East Delhi, challenges faced
+        ];
+        
+        // Check if we need to switch topics
+        if (conversationState.questionsOnCurrentTopic >= QUESTIONS_PER_TOPIC) {
+            // Time to switch topic
+            conversationState.questionsOnCurrentTopic = 0;
+            
+            // Find a topic we haven't exhausted yet
+            const availableTopics = TOPICS.filter(t => {
+                const timesAsked = conversationState.topicsDiscussed.filter(asked => asked === t).length;
+                return timesAsked < 2; // Allow each topic max 2 rotations
+            });
+            
+            if (availableTopics.length > 0) {
+                // Pick a random new topic
+                conversationState.currentTopic = availableTopics[Math.floor(Math.random() * availableTopics.length)];
+            } else {
+                // All topics exhausted, cycle through randomly
+                conversationState.currentTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+            }
+        }
+        
+        // Track topic
+        if (!conversationState.currentTopic) {
+            conversationState.currentTopic = 'aspirations'; // Start with aspirations
+        }
+        conversationState.topicsDiscussed.push(conversationState.currentTopic);
+        conversationState.questionsOnCurrentTopic++;
+        
+        // Build context-aware system message based on current topic and progress
+        let contextMessage = '';
         
         if (!conversationState.hasGreeted) {
-            enhancedSystemMessage = `This is the FIRST message. Start with a natural greeting variation (choose one randomly):
-- "Good morning, Ms. Singh. Please tell me about yourself."
-- "Good morning. I'd like to begin by hearing about your background."
-- "Good morning, Ms. Singh. Let's start with you introducing yourself."
-- "Morning, Ms. Singh. Why don't you begin by telling us about yourself?"
+            // First interaction - user is responding to greeting
+            contextMessage = `The candidate has just been greeted with "Good morning, Tanya. Please introduce yourself."
 
-After this, NEVER greet again. Move directly to questions based on her responses.`;
+They are now responding to that greeting. Listen to their introduction.
+
+DO NOT greet them again. DO NOT ask about basic DAF details you already know (name, age, family, education).
+
+Ask your FIRST substantive question about ASPIRATIONS:
+- "Why did you choose IFS as your first preference?"
+- "What draws you to the foreign service?"
+- "Why civil services?"
+
+Keep it SHORT (1 sentence). Question count: ${conversationState.questionCount + 1}/${QUESTION_LIMIT}`;
             conversationState.hasGreeted = true;
-        } else if (!conversationState.askedIntroduction) {
             conversationState.askedIntroduction = true;
-        } else if (!conversationState.askedWhyCivilServices && conversationState.questionCount === 1) {
-            enhancedSystemMessage = `She has introduced herself. Now ask about civil services motivation (vary the phrasing):
-- "What draws you to the civil services?"
-- "Why this career choice?"
-- "What motivates you to join the administrative services?"
-- "Why civil services, specifically?"
-
-Keep it SHORT - one question only.`;
-            conversationState.askedWhyCivilServices = true;
         } else {
-            // For subsequent questions, ensure variety
-            enhancedSystemMessage = `You've asked ${conversationState.questionCount} questions so far.
-Topics discussed: ${conversationState.topicsDiscussed.join(', ') || 'none yet'}
+            // Generate topic-specific questions based on current topic
+            const topicGuidance = {
+                aspirations: `Topic: ASPIRATIONS & MOTIVATION
+Ask about:
+- Why IFS specifically?
+- Why civil services over private sector?
+- What draws her to diplomacy?
+- If not IFS, will IAS be equally motivating?
+- How does Economics help in foreign service?
+- What does she think makes a good diplomat?`,
 
-CRITICAL RULES:
-1. Ask about NEW topics - don't repeat what you've already covered
-2. Base questions on her PREVIOUS answers (show you're listening)
-3. Ask ONE question at a time
-4. Vary your question style:
-   - Direct: "What's your view on...?"
-   - Probing: "How would you address...?"
-   - Challenging: "Don't you think...?"
-   - Hypothetical: "If you were DM of..."
-   - Opinion: "Your take on...?"
-5. Mix question types: policy, ethics, current affairs, administration
-6. Keep responses under 2 sentences
+                international_relations: `Topic: INTERNATIONAL RELATIONS & CURRENT AFFAIRS
+Ask about:
+- Russia-Ukraine war - India's position?
+- Israel-Palestine conflict - should India take sides?
+- Indo-Pacific strategy - what's at stake?
+- India-China border tensions - way forward?
+- Global South leadership - is India ready?
+- UNSC reform - India's permanent seat chances?
+- Neighborhood first policy - success or failure?
+- Diaspora diplomacy importance`,
 
-Examples of good varied questions:
-- "How would you handle farmer protests as a district magistrate?"
-- "Your thoughts on the recent changes in education policy?"
-- "What's the biggest challenge facing Delhi's governance?"
-- "If posted in a Naxal-affected area, what would be your first priority?"
-- "Justify India's stand on climate finance."`;
+                economics: `Topic: ECONOMICS (Her Optional Subject)
+Ask about:
+- Global debt vulnerabilities (her MUN topic)
+- India's inflation and unemployment challenges
+- Pink tax and gender economics (her debate topic)
+- Fiscal federalism - states vs center
+- Women's labour force participation - how to increase?
+- Direct vs indirect taxation debate
+- India's economic growth strategy
+- Inequality and inclusive growth`,
+
+                literature_philosophy: `Topic: LITERATURE & PHILOSOPHY
+Ask about:
+- What appeals about absurdist literature?
+- Dystopian themes - relevance to modern governance?
+- How does literature shape administrative thinking?
+- Philosophical frameworks for policy making
+- Camus, Kafka, Orwell - what do they teach administrators?
+- Ethics from literature`,
+
+                social_issues: `Topic: SOCIAL ISSUES
+Ask about:
+- Mental health (she organized campaign) - policy gaps?
+- Education for underserved (she volunteers) - what needs fixing?
+- Social media and youth mental health
+- Gender equality - beyond pink tax
+- Youth unemployment solutions
+- NGO vs government - which is more effective?`,
+
+                administration: `Topic: ADMINISTRATION & GOVERNANCE
+Ask situational questions:
+- As DM of East Delhi, how would you improve education?
+- As MEA officer, handling India-Pakistan tensions?
+- Posted in Naxal-affected district - priorities?
+- Communal riots in your district - immediate steps?
+- Implementing unpopular policy - approach?
+- Conflicting orders from senior - what to do?`,
+
+                ethics: `Topic: ETHICAL DILEMMAS
+Ask about:
+- Development vs environment - how to balance?
+- Senior asks you to do something unethical - response?
+- Limited resources - who gets priority?
+- Whistleblowing vs loyalty to department
+- Personal values vs public duty
+- Ends justify means - agree or disagree?`,
+
+                current_affairs_india: `Topic: CURRENT AFFAIRS - INDIA
+Ask about:
+- Delhi governance challenges (her home)
+- New education policy - pros and cons?
+- Women's safety in urban areas
+- Digital India - benefits and concerns?
+- Farm laws controversy - lessons learned?
+- Reservation policy - needs reform?`,
+
+                extracurriculars: `Topic: EXTRACURRICULARS & ACHIEVEMENTS
+Ask about:
+- Founding ARTIBUS - how does public speaking help in admin?
+- MUN Best Delegate - what did you learn?
+- Debate adjudicator - judging skills in administration?
+- Cue sports (pool) - what does it teach?
+- Vice Head Girl - leadership lessons?
+- Volunteering - why children's education?`,
+
+                personal_background: `Topic: PERSONAL BACKGROUND & CHALLENGES
+Ask about:
+- Growing up in East Delhi - what did you observe?
+- Single parent household - how did it shape you?
+- Overcoming challenges - specific examples?
+- EWS category - should reservation continue?
+- From SRCC to civil services - journey?
+- What drives you despite difficulties?`
+            };
+            
+            const currentGuidance = topicGuidance[conversationState.currentTopic] || topicGuidance.aspirations;
+            
+            contextMessage = `Question ${conversationState.questionCount + 1}/${QUESTION_LIMIT}
+Current Topic: ${conversationState.currentTopic.toUpperCase().replace('_', ' ')}
+Questions on this topic so far: ${conversationState.questionsOnCurrentTopic}/${QUESTIONS_PER_TOPIC}
+
+${currentGuidance}
+
+CRITICAL:
+- Ask ONE short question (1-2 sentences max)
+- Be formal, probing, and sharp
+- If answer is vague, immediately follow up: "Be specific" or "Give an example"
+- Don't ask what you already know from DAF
+- Switch style: direct → challenging → hypothetical → opinion`;
         }
         
         conversationState.questionCount++;
@@ -169,26 +405,27 @@ Examples of good varied questions:
             sessions.get(sessionId).conversationState = conversationState;
         }
         
-        // Add enhanced system message to the conversation
-        const enhancedMessages = [
-            ...messages.slice(0, 1), // Keep original system message
-            { role: 'system', content: enhancedSystemMessage },
-            ...messages.slice(1) // Keep rest of conversation
+        // Prepare messages for fine-tuned model
+        const modelMessages = [
+            ...messages.slice(0, 1), // Keep original personality system message
+            { role: 'system', content: contextMessage }, // Add context
+            ...messages.slice(1) // Keep conversation history
         ];
         
+        // Use fine-tuned model: ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${API_KEY}`,
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: enhancedMessages,
-                temperature: 0.9, // Higher for more varied questions
+                model: 'ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk', // Fine-tuned UPSC model
+                messages: modelMessages,
+                temperature: 0.8, // Balanced for varied but focused questions
                 max_tokens: 150,
-                presence_penalty: 0.7, // Discourage repetition
-                frequency_penalty: 0.8 // Strong penalty for repeating phrases
+                presence_penalty: 0.6,
+                frequency_penalty: 0.7
             })
         });
 
@@ -266,6 +503,22 @@ app.post('/api/session/track', (req, res) => {
     res.json({ success: true });
 });
 
+// Delete session (for Stop button - no metrics needed)
+app.post('/api/session/delete', (req, res) => {
+    const { sessionId } = req.body;
+    
+    if (!sessionId) {
+        return res.status(400).json({ error: 'Session ID required' });
+    }
+    
+    if (sessions.has(sessionId)) {
+        sessions.delete(sessionId);
+        console.log(`Session ${sessionId} deleted (stopped without metrics)`);
+    }
+    
+    res.json({ success: true });
+});
+
 // Generate final metrics report
 app.post('/api/session/report', async (req, res) => {
     try {
@@ -286,7 +539,6 @@ ${JSON.stringify(conversationHistory, null, 2)}
 
 Session Metrics:
 - Total responses: ${metrics.responses.length}
-- Interruptions: ${metrics.interruptions || 0}
 
 CRITICAL EVALUATION RULES:
 1. Be STRICT - this is not the time for encouragement, it's time for reality
@@ -327,7 +579,7 @@ Format as JSON:
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${API_KEY}`,
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -391,10 +643,7 @@ Format as JSON:
         res.json({
             analysis,
             rawMetrics: {
-                totalResponses: metrics.responses.length,
-                interruptions: metrics.interruptions || 0,
-                avgFillers: '0',
-                avgRepetitions: '0'
+                totalResponses: metrics.responses.length
             }
         });
         
@@ -406,5 +655,12 @@ Format as JSON:
 
 app.listen(PORT, () => {
     console.log(`✅ Server running on http://localhost:${PORT}`);
-    console.log(`✅ API Key loaded: ${API_KEY.substring(0, 20)}...`);
+    console.log(`✅ OpenAI API Key loaded: ${OPENAI_API_KEY.substring(0, 20)}...`);
+    console.log(`✅ ElevenLabs API Key loaded: ${ELEVENLABS_API_KEY.substring(0, 20)}...`);
+    console.log(`🤖 Using Fine-tuned UPSC Model: ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk`);
+    console.log(`🎤 Using ElevenLabs Flash v2.5 for ultra-low latency TTS (75ms)`);
+    console.log(`🗣️  Using Indian accent voice for UPSC interviewer`);
+    console.log(`👤 Interviewing: Tanya Singh, Roll No. 0804181`);
+    console.log(`⏱️  Interview Duration: 60-70 questions (~15-20 minutes)`);
+    console.log(`🔄 Topic Rotation: Every ~10 questions across 10 domains`);
 });

@@ -64,23 +64,12 @@
             text-align: center;
         }
 
-        #interviewButton.active {
-            animation: none;
+        #interviewButton.paused {
+            background: #666666;
         }
 
-        #interviewButton.speaking {
-            animation: none;
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                transform: scale(1);
-                box-shadow: 0 0 40px rgba(234, 239, 255, 0.3);
-            }
-            50% {
-                transform: scale(1.1);
-                box-shadow: 0 0 80px rgba(234, 239, 255, 0.6);
-            }
+        #interviewButton.paused span {
+            color: #ffffff;
         }
 
         .fade-out {
@@ -132,25 +121,70 @@
             color: #ffffff;
         }
 
-        .error-message {
+        #stopButton {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 100, 100, 0.1);
-            border: 1px solid rgba(255, 100, 100, 0.3);
-            color: #ffaaaa;
-            padding: 20px 30px;
-            border-radius: 12px;
+            top: 40px;
+            right: 200px;
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid #333333;
+            color: #888888;
+            border-radius: 0;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 400;
             opacity: 0;
+            transition: all 0.3s ease;
             pointer-events: none;
-            transition: opacity 0.3s ease;
-            max-width: 80%;
-            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .error-message.visible {
+        #stopButton.visible {
             opacity: 1;
+            pointer-events: all;
+        }
+
+        #stopButton:hover {
+            background: transparent;
+            border-color: #ff6666;
+            color: #ff6666;
+        }
+
+        /* Snackbar for errors */
+        #snackbar {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #333333;
+            color: #ffffff;
+            padding: 16px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            max-width: 400px;
+            z-index: 2000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        #snackbar.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #snackbar.error {
+            background: #d32f2f;
+        }
+
+        #snackbar.warning {
+            background: #f57c00;
+        }
+
+        #snackbar.info {
+            background: #1976d2;
         }
 
         @media (max-width: 768px) {
@@ -170,9 +204,22 @@
                 font-size: 10px;
             }
 
+            #stopButton {
+                top: 20px;
+                right: 165px;
+                padding: 8px 16px;
+                font-size: 10px;
+            }
+
             #statusText {
                 font-size: 13px;
                 bottom: 60px;
+            }
+
+            #snackbar {
+                bottom: 20px;
+                right: 20px;
+                max-width: calc(100% - 40px);
             }
         }
 
@@ -185,280 +232,295 @@
             #interviewButton span {
                 font-size: 11px;
             }
+
+            #stopButton {
+                top: 20px;
+                right: auto;
+                left: 20px;
+                padding: 8px 12px;
+                font-size: 9px;
+            }
+
+            #endButton {
+                top: 20px;
+                right: 20px;
+                padding: 8px 12px;
+                font-size: 9px;
+            }
         }
 
         /* Metrics Overlay Styles - Minimal Monochrome */
-#metricsOverlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.97);
-    z-index: 1000;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    overflow-y: auto;
-    padding: 20px;
-}
+        #metricsOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.97);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            overflow-y: auto;
+            padding: 20px;
+        }
 
-#metricsOverlay.visible {
-    opacity: 1;
-}
+        #metricsOverlay.visible {
+            opacity: 1;
+        }
 
-.metrics-modal {
-    max-width: 800px;
-    margin: 0 auto;
-    background: #000000;
-    border: 1px solid #333333;
-}
+        .metrics-modal {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #000000;
+            border: 1px solid #333333;
+        }
 
-.metrics-header {
-    padding: 40px 40px 20px;
-    border-bottom: 1px solid #222222;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+        .metrics-header {
+            padding: 40px 40px 20px;
+            border-bottom: 1px solid #222222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-.metrics-header h2 {
-    color: #ffffff;
-    font-size: 18px;
-    font-weight: 400;
-    margin: 0;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-}
+        .metrics-header h2 {
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 400;
+            margin: 0;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
 
-.close-metrics {
-    background: none;
-    border: 1px solid #333333;
-    color: #888888;
-    font-size: 20px;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-weight: 300;
-}
+        .close-metrics {
+            background: none;
+            border: 1px solid #333333;
+            color: #888888;
+            font-size: 20px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 300;
+        }
 
-.close-metrics:hover {
-    border-color: #666666;
-    color: #ffffff;
-}
+        .close-metrics:hover {
+            border-color: #666666;
+            color: #ffffff;
+        }
 
-.metrics-content {
-    padding: 30px 40px;
-}
+        .metrics-content {
+            padding: 30px 40px;
+        }
 
-.metrics-section {
-    margin-bottom: 40px;
-    padding-bottom: 30px;
-    border-bottom: 1px solid #1a1a1a;
-}
+        .metrics-section {
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #1a1a1a;
+        }
 
-.metrics-section:last-child {
-    border-bottom: none;
-}
+        .metrics-section:last-child {
+            border-bottom: none;
+        }
 
-.metrics-section h3 {
-    color: #ffffff;
-    font-size: 12px;
-    font-weight: 400;
-    margin-bottom: 20px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-}
+        .metrics-section h3 {
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 400;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
 
-.scores-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-}
+        .scores-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
 
-.score-card {
-    background: #0a0a0a;
-    padding: 20px;
-    border: 1px solid #1a1a1a;
-    text-align: left;
-}
+        .score-card {
+            background: #0a0a0a;
+            padding: 20px;
+            border: 1px solid #1a1a1a;
+            text-align: left;
+        }
 
-.score-label {
-    color: #666666;
-    font-size: 10px;
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
+        .score-label {
+            color: #666666;
+            font-size: 10px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
 
-.score-value {
-    color: #ffffff;
-    font-size: 28px;
-    font-weight: 300;
-    margin-bottom: 12px;
-    font-family: 'Courier New', monospace;
-}
+        .score-value {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: 300;
+            margin-bottom: 12px;
+            font-family: 'Courier New', monospace;
+        }
 
-.score-bar {
-    height: 2px;
-    background: #1a1a1a;
-    overflow: hidden;
-}
+        .score-bar {
+            height: 2px;
+            background: #1a1a1a;
+            overflow: hidden;
+        }
 
-.score-fill {
-    height: 100%;
-    background: #ffffff;
-    transition: width 0.8s ease;
-}
+        .score-fill {
+            height: 100%;
+            background: #ffffff;
+            transition: width 0.8s ease;
+        }
 
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
-    margin-top: 15px;
-}
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
 
-.stat-item {
-    background: #0a0a0a;
-    padding: 15px 20px;
-    border: 1px solid #1a1a1a;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+        .stat-item {
+            background: #0a0a0a;
+            padding: 15px 20px;
+            border: 1px solid #1a1a1a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-.stat-label {
-    color: #666666;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
+        .stat-label {
+            color: #666666;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
 
-.stat-value {
-    color: #ffffff;
-    font-size: 16px;
-    font-weight: 300;
-    font-family: 'Courier New', monospace;
-}
+        .stat-value {
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 300;
+            font-family: 'Courier New', monospace;
+        }
 
-.stat-value.warning {
-    color: #888888;
-}
+        .stat-value.warning {
+            color: #888888;
+        }
 
-.strengths-list, .improvements-list {
-    list-style: none;
-    padding: 0;
-    margin: 15px 0;
-}
+        .strengths-list, .improvements-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
 
-.strength-item, .improvement-item {
-    background: #0a0a0a;
-    padding: 15px 20px;
-    margin-bottom: 10px;
-    border-left: 2px solid #333333;
-    color: #cccccc;
-    font-size: 13px;
-    line-height: 1.6;
-    font-weight: 300;
-}
+        .strength-item, .improvement-item {
+            background: #0a0a0a;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-left: 2px solid #333333;
+            color: #cccccc;
+            font-size: 13px;
+            line-height: 1.6;
+            font-weight: 300;
+        }
 
-.strength-item {
-    border-left-color: #ffffff;
-}
+        .strength-item {
+            border-left-color: #ffffff;
+        }
 
-.improvement-item {
-    border-left-color: #666666;
-}
+        .improvement-item {
+            border-left-color: #666666;
+        }
 
-.detailed-feedback {
-    margin-top: 15px;
-}
+        .detailed-feedback {
+            margin-top: 15px;
+        }
 
-.feedback-item {
-    background: #0a0a0a;
-    padding: 20px;
-    margin-bottom: 15px;
-    border: 1px solid #1a1a1a;
-}
+        .feedback-item {
+            background: #0a0a0a;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #1a1a1a;
+        }
 
-.feedback-item h4 {
-    color: #ffffff;
-    font-size: 11px;
-    font-weight: 400;
-    margin: 0 0 12px 0;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
+        .feedback-item h4 {
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 400;
+            margin: 0 0 12px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
 
-.feedback-item p {
-    color: #999999;
-    font-size: 13px;
-    line-height: 1.7;
-    margin: 0;
-    font-weight: 300;
-}
+        .feedback-item p {
+            color: #999999;
+            font-size: 13px;
+            line-height: 1.7;
+            margin: 0;
+            font-weight: 300;
+        }
 
-.overall-feedback {
-    background: #0a0a0a;
-    padding: 25px;
-    border: 1px solid #1a1a1a;
-    color: #cccccc;
-    font-size: 13px;
-    line-height: 1.8;
-    margin-top: 15px;
-    font-weight: 300;
-}
+        .overall-feedback {
+            background: #0a0a0a;
+            padding: 25px;
+            border: 1px solid #1a1a1a;
+            color: #cccccc;
+            font-size: 13px;
+            line-height: 1.8;
+            margin-top: 15px;
+            font-weight: 300;
+        }
 
-.metrics-footer {
-    padding: 30px 40px;
-    border-top: 1px solid #222222;
-    display: flex;
-    justify-content: center;
-}
+        .metrics-footer {
+            padding: 30px 40px;
+            border-top: 1px solid #222222;
+            display: flex;
+            justify-content: center;
+        }
 
-.btn-primary {
-    background: #ffffff;
-    color: #000000;
-    border: none;
-    padding: 12px 30px;
-    font-size: 11px;
-    font-weight: 400;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
+        .btn-primary {
+            background: #ffffff;
+            color: #000000;
+            border: none;
+            padding: 12px 30px;
+            font-size: 11px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
 
-.btn-primary:hover {
-    background: #dddddd;
-}
+        .btn-primary:hover {
+            background: #dddddd;
+        }
 
-@media (max-width: 768px) {
-    .metrics-modal {
-        margin: 0;
-    }
+        @media (max-width: 768px) {
+            .metrics-modal {
+                margin: 0;
+            }
 
-    .metrics-header {
-        padding: 30px 20px 15px;
-    }
+            .metrics-header {
+                padding: 30px 20px 15px;
+            }
 
-    .metrics-header h2 {
-        font-size: 14px;
-    }
+            .metrics-header h2 {
+                font-size: 14px;
+            }
 
-    .metrics-content {
-        padding: 20px;
-    }
+            .metrics-content {
+                padding: 20px;
+            }
 
-    .scores-grid {
-        grid-template-columns: 1fr;
-    }
+            .scores-grid {
+                grid-template-columns: 1fr;
+            }
 
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-}
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -467,395 +529,570 @@
             <span>Begin Interview</span>
         </button>
         <div id="statusText"></div>
+        <button id="stopButton">Stop</button>
         <button id="endButton">End Interview</button>
-        <div id="errorMessage" class="error-message"></div>
     </div>
 
+    <div id="snackbar"></div>
+
     <script>
-        const SYSTEM_PROMPT_BASE = `You are a UPSC Civil Services Personality Test Board Member interviewing candidate Tanya Singh.
-Your task is to conduct a realistic UPSC interview exactly like an officer in the UPSC board room.
-Use Tanya's DAF (attached by the user) as the factual base for your questions.
+        const SYSTEM_PROMPT_BASE = `You are a Senior UPSC Interview Board Member at Dholpur House conducting Tanya Singh's personality test interview.
 
-INTERVIEWER PERSONALITY
-Male, age 55–62
-Retired IAS officer with experience in Personnel, Home, and Finance
-Formal, polite, neutral
-Not very strict but definitely not lenient
-Short, sharp questions
-Professional, unemotional tone
-Gives zero validation
-Probes deeply, uses follow-ups, exposes weak logic
-No long lectures, no hints, no softening
-Asks unpredictable on-the-spot questions
+YOUR ROLE: You are the INTERVIEWER asking questions. Tanya is the CANDIDATE answering.
 
-YOUR PERSONAL INTERESTS (for this session):
-{INTERESTS}
+YOUR PERSONALITY:
+- Formal, calm, slightly strict, authoritative
+- Retired IAS officer, age 55-62
+- Ask short, sharp, probing questions
+- Use follow-ups when answers are vague
+- Switch topics quickly to test adaptability
+- Never flatter or encourage
+- Test depth of understanding, not memorization
 
-CRITICAL: When Tanya mentions any of your personal interests during her responses, you should:
-1. Show genuine interest naturally: "Oh, that's interesting..." or "I'm quite interested in that myself..."
-2. Share a brief personal perspective or insight (1-2 sentences)
-3. Engage in 2-3 turns of natural discussion on that topic
-4. Then smoothly transition back to formal questioning
-5. Do NOT announce you have these interests upfront - only reveal them when relevant
+YOU ALREADY KNOW FROM HER DAF (don't ask these):
+- Name: Tanya Singh
+- Age: 23 years old
+- From: New Ashok Nagar, East Delhi
+- Education: B.A. Economics (Hons), SRCC, University of Delhi (8.77 CGPA)
+- Optional: Economics
+- Family: Single parent household, father deceased
+- Top Service Choice: Indian Foreign Service (IFS)
+- Achievements: MUN Best Delegate (Global Debt), Pink Tax debate prize, Founded ARTIBUS platform, Mental health campaign organizer
+- Hobbies: Absurdist literature, volunteering with children, cue sports (pool)
 
-CONDUCT RULES
-Start the simulation directly:
-"Good morning, Ms. Singh. Please introduce yourself."
-Ask one question at a time.
-Use Tanya's DAF heavily — her background, domicile, education, optional (Economics), roles, volunteering, achievements, preferences, everything.
-Ask follow-up questions:
-"Why?"
-"How exactly?"
-"Can you justify that?"
-"What is the administrative implication?"
-"What if you were wrong?"
-"Give me a concrete example."
-"How would you apply this on the ground?"
-"What data will you use?"
-"Who are the stakeholders?"
+WHAT TO ASK HER ABOUT:
 
-Ask random on-the-spot questions based on:
-DAF details, her optional subject, volunteering experience, leadership roles, hobbies, home state/area issues, service preference, ethical dilemmas, situational administrative problems, national & international current affairs, economics-related policy, Delhi-specific governance issues, India's global positioning.
+1. ASPIRATIONS & MOTIVATION
+- Why civil services?
+- Why IFS specifically? (her #1 choice)
+- What draws her to diplomacy?
+- If she doesn't get IFS, will IAS be equally motivating?
+- How does Economics optional help in foreign service?
 
-Do not praise, correct, validate, or tell the candidate if she is right or wrong.
-Never give hints. Just question, probe, and move on.
-Maintain UPSC decorum always.
+2. INTERNATIONAL RELATIONS (IFS focus)
+- Russia-Ukraine war and India's position
+- Israel-Palestine conflict
+- Indo-Pacific strategy
+- India-China border issues
+- Neighbourhood first policy
+- Global South leadership
+- Multilateralism and UNSC reform
+- Diaspora diplomacy
 
-Keep responses conversational and concise for voice interaction. Maximum 2-3 sentences per response unless engaging in shared interest discussion.
+3. ECONOMICS (her optional)
+- Global debt vulnerabilities (her MUN topic)
+- Inflation, unemployment in India
+- Fiscal federalism
+- Women's labour force participation
+- Pink tax and gender economics
+- Direct vs indirect taxation
+- India's economic challenges
 
-IMPORTANT: If the candidate interrupts you or speaks while you're speaking, immediately pause and let them complete their thought. Acknowledge politely: "Please continue" or "Yes, go ahead" before resuming.`;
+4. CURRENT AFFAIRS & POLICY
+- Mental health (she organized campaign)
+- Education for underserved (she volunteers)
+- Delhi governance issues
+- Social media regulation
+- Gender equality measures
+- Youth unemployment
 
-        let conversationHistory = [];
-        let isInterviewActive = false;
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let audioContext = null;
-        let analyser = null;
-        let animationFrameId = null;
-        let isProcessing = false;
-        let sessionId = null;
-        let sessionInterests = [];
-        let systemPrompt = '';
-        
-        // Advanced features
-        let silenceDetectionTimer = null;
-        let isSpeaking = false;
-        let currentAudio = null;
-        let interruptionDetected = false;
-        let pauseThreshold = 1500; // 1.5 seconds of silence triggers interviewer
-        let responseMetrics = [];
+5. LITERATURE & PHILOSOPHY (her hobby)
+- Absurdist literature - what appeals to her?
+- Dystopian themes - relevance to governance?
+- Ethical questions from literature
+- Philosophy and administration
 
-        const button = document.getElementById('interviewButton');
-        const buttonText = button.querySelector('span');
-        const statusText = document.getElementById('statusText');
-        const endButton = document.getElementById('endButton');
-        const errorMessage = document.getElementById('errorMessage');
+6. SITUATIONAL/ADMINISTRATIVE
+- As DM of East Delhi, how would you...?
+- As MEA officer, India's stand on...?
+- Handling protests, misinformation, crises
+- Policy implementation challenges
 
-        // Show error message
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.classList.add('visible');
+7. FOLLOW-UPS
+When she gives vague/general answers:
+- "Be more specific."
+- "That sounds generic. What's YOUR view?"
+- "How exactly would you implement that?"
+- "You mentioned X - justify that claim."
+- "Don't you think there's a contradiction here?"
+
+CRITICAL RULES:
+- Ask ONE question at a time (1-2 sentences max)
+- Questions should be substantive, not personal details
+- Challenge vague answers immediately
+- Switch domains to test breadth
+- No praise, no validation
+- Keep UPSC formal tone always
+
+EXAMPLES OF GOOD QUESTIONS:
+✅ "Why IFS over IAS?"
+✅ "What's India's position on the Russia-Ukraine war?"
+✅ "How does pink tax impact women's economic participation?"
+✅ "You founded ARTIBUS - how does public speaking help in administration?"
+✅ "What appeals to you about absurdist literature?"
+✅ "As DM, how would you address education gaps in East Delhi?"
+
+EXAMPLES OF BAD QUESTIONS (don't ask these):
+❌ "What's your name?"
+❌ "Tell me about your family background."
+❌ "What's your roll number?"
+❌ "Where are you from?"
+❌ "What did you study?"
+
+You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CURRENT AFFAIRS.`;
+
+        // ============ STATE MANAGEMENT ============
+        const AppState = {
+            interview: {
+                active: false,
+                paused: false,
+                sessionId: null,
+                interests: [],
+                conversationHistory: []
+            },
+            audio: {
+                context: null,
+                currentPlayback: null,
+                currentAbortController: null,
+                mediaRecorder: null,
+                analyser: null,
+                chunks: [],
+                visualizationFrameId: null
+            },
+            speech: {
+                isSpeaking: false,
+                isProcessing: false,
+                interruptionDetected: false
+            },
+            ui: {
+                button: null,
+                buttonText: null,
+                statusText: null,
+                endButton: null,
+                stopButton: null,
+                snackbar: null
+            }
+        };
+
+        // ============ ERROR HANDLING & NOTIFICATIONS ============
+        function showSnackbar(message, type = 'info') {
+            const snackbar = AppState.ui.snackbar;
+            snackbar.textContent = message;
+            snackbar.className = `visible ${type}`;
+            
             setTimeout(() => {
-                errorMessage.classList.remove('visible');
-            }, 5000);
+                snackbar.classList.remove('visible');
+            }, type === 'error' ? 5000 : 3000);
         }
 
-        // Initialize audio context for visualization
-        function initAudioContext() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        function handleError(error, context) {
+            console.error(`Error in ${context}:`, error);
+            
+            // Network errors
+            if (!navigator.onLine) {
+                showSnackbar('No internet connection. Please try again later.', 'error');
+                return;
+            }
+            
+            // API errors
+            if (error.message.includes('API') || error.message.includes('fetch')) {
+                showSnackbar('Server error. Please try again later.', 'error');
+                return;
+            }
+            
+            // Microphone errors
+            if (error.name && (error.name.includes('NotAllowed') || error.name.includes('Permission'))) {
+                showSnackbar('Microphone access denied. Please allow and reload.', 'error');
+                return;
+            }
+            
+            // Generic error
+            showSnackbar('An error occurred. Please try again later.', 'error');
+        }
+
+        // ============ INITIALIZATION ============
+        function initializeApp() {
+            // Get UI elements
+            AppState.ui.button = document.getElementById('interviewButton');
+            AppState.ui.buttonText = AppState.ui.button.querySelector('span');
+            AppState.ui.statusText = document.getElementById('statusText');
+            AppState.ui.endButton = document.getElementById('endButton');
+            AppState.ui.stopButton = document.getElementById('stopButton');
+            AppState.ui.snackbar = document.getElementById('snackbar');
+
+            // Initialize audio context
+            AppState.audio.context = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Event listeners
+            AppState.ui.button.addEventListener('click', handleButtonClick);
+            AppState.ui.endButton.addEventListener('click', endInterview);
+            AppState.ui.stopButton.addEventListener('click', stopInterview);
+
+            // Resume audio context on user interaction
+            document.addEventListener('click', () => {
+                if (AppState.audio.context.state === 'suspended') {
+                    AppState.audio.context.resume();
+                }
+            }, { once: true });
+
+            // Online/offline detection
+            window.addEventListener('online', () => showSnackbar('Connection restored', 'info'));
+            window.addEventListener('offline', () => showSnackbar('No internet connection', 'warning'));
+        }
+
+        // ============ BUTTON CLICK HANDLER ============
+        function handleButtonClick() {
+            if (!AppState.interview.active) {
+                startInterview();
+            } else if (AppState.interview.paused) {
+                resumeInterview();
+            } else {
+                pauseInterview();
             }
         }
 
-        // Start interview
+        // ============ PAUSE/RESUME FUNCTIONALITY ============
+        function pauseInterview() {
+            if (!AppState.interview.active || AppState.interview.paused) return;
+            
+            AppState.interview.paused = true;
+            AppState.ui.button.classList.add('paused');
+            AppState.ui.buttonText.textContent = 'Resume';
+            AppState.ui.buttonText.style.display = 'block';
+            AppState.ui.buttonText.classList.remove('fade-out');
+            
+            // Stop current audio playback
+            if (AppState.audio.currentPlayback) {
+                AppState.audio.currentPlayback.pause();
+                if (AppState.audio.visualizationFrameId) {
+                    cancelAnimationFrame(AppState.audio.visualizationFrameId);
+                }
+                AppState.ui.button.style.transform = 'scale(1)';
+            }
+            
+            // Stop microphone recording
+            if (AppState.audio.mediaRecorder && AppState.audio.mediaRecorder.state === 'recording') {
+                AppState.audio.mediaRecorder.stop();
+            }
+            
+            updateStatus('Interview paused');
+            showSnackbar('Interview paused', 'info');
+        }
+
+        function resumeInterview() {
+            if (!AppState.interview.active || !AppState.interview.paused) return;
+            
+            AppState.interview.paused = false;
+            AppState.ui.button.classList.remove('paused');
+            AppState.ui.buttonText.classList.add('fade-out');
+            
+            setTimeout(() => {
+                AppState.ui.buttonText.style.display = 'none';
+            }, 300);
+            
+            updateStatus('Resuming interview...');
+            showSnackbar('Interview resumed', 'info');
+            
+            // Resume listening
+            setTimeout(() => {
+                if (!AppState.speech.isProcessing) {
+                    startContinuousListening();
+                }
+            }, 500);
+        }
+
+        // ============ START INTERVIEW ============
         async function startInterview() {
-            // Pre-check microphone permission
             try {
-                console.log('Checking microphone access...');
-                
-                // Request permission first (this shows the browser permission dialog)
+                // Check microphone permission first
                 const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                console.log('✅ Microphone permission granted');
-                
-                // Stop the test stream immediately
                 testStream.getTracks().forEach(track => track.stop());
                 
-            } catch (error) {
-                console.error('Microphone permission check failed:', error);
-                
-                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                    showError('Please allow microphone access to start the interview.\n\n1. Click "Allow" when prompted\n2. Or click the 🔒 icon in address bar\n3. Then reload and try again');
-                } else if (error.name === 'NotFoundError') {
-                    showError('No microphone detected. Please connect a microphone.');
-                } else {
-                    showError('Microphone error: ' + error.message);
-                }
-                return;
-            }
-            
-            isInterviewActive = true;
-            conversationHistory = [];
-            responseMetrics = [];
-            
-            // Initialize session with random interests
-            try {
+                // Initialize session
                 const sessionResponse = await fetch('/api/session/init', {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 });
+                
+                if (!sessionResponse.ok) throw new Error('Session init failed');
+                
                 const sessionData = await sessionResponse.json();
-                sessionId = sessionData.sessionId;
-                sessionInterests = sessionData.interests;
+                AppState.interview.sessionId = sessionData.sessionId;
+                AppState.interview.interests = sessionData.interests;
+                AppState.interview.active = true;
+                AppState.interview.conversationHistory = [];
                 
-                // Create system prompt with interests
-                systemPrompt = SYSTEM_PROMPT_BASE.replace(
-                    '{INTERESTS}',
-                    `- ${sessionInterests[0]}\n- ${sessionInterests[1]}`
-                );
+                // Update UI
+                AppState.ui.buttonText.classList.add('fade-out');
+                setTimeout(() => {
+                    AppState.ui.buttonText.style.display = 'none';
+                }, 300);
+                AppState.ui.endButton.classList.add('visible');
+                AppState.ui.stopButton.classList.add('visible');
                 
-                console.log('Session initialized with interests:', sessionInterests);
+                // Start interview
+                updateStatus('Interviewer is speaking...');
+                await speakText("Good morning, Tanya. Please introduce yourself.");
+                
+                setTimeout(() => startContinuousListening(), 300);
+                
             } catch (error) {
-                console.error('Session init error:', error);
-                showError('Failed to initialize session');
-                return;
+                handleError(error, 'startInterview');
+                resetUI();
             }
-            
-            // Fade out text
-            buttonText.classList.add('fade-out');
-            setTimeout(() => {
-                buttonText.style.display = 'none';
-            }, 300);
-
-            // Show end button
-            endButton.classList.add('visible');
-
-            // Start with greeting from interviewer
-            updateStatus('Interviewer is speaking...');
-            await speakText("Good morning, Ms. Singh. Please introduce yourself.");
-            
-            // Start continuous listening with pause detection
-            setTimeout(() => startContinuousListening(), 500);
         }
 
-        // End interview and show metrics
+        // ============ END INTERVIEW ============
         async function endInterview() {
-            if (!isInterviewActive) return;
+            if (!AppState.interview.active) return;
             
-            isInterviewActive = false;
-            isProcessing = false;
+            AppState.interview.active = false;
+            AppState.interview.paused = false;
             
-            // Stop any ongoing recording
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            }
-
-            // Stop current audio
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio = null;
-            }
-
-            // Stop animation
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
+            // Disable both buttons immediately to prevent double-clicks
+            AppState.ui.endButton.disabled = true;
+            AppState.ui.stopButton.disabled = true;
+            AppState.ui.endButton.style.opacity = '0.5';
+            AppState.ui.stopButton.style.opacity = '0.5';
+            AppState.ui.endButton.style.cursor = 'not-allowed';
+            AppState.ui.stopButton.style.cursor = 'not-allowed';
             
-            // Clear silence detection
-            if (silenceDetectionTimer) {
-                clearTimeout(silenceDetectionTimer);
-            }
-
-            // Show loading state
-            updateStatus('Generating your performance report...');
-            button.classList.add('speaking');
+            // Stop everything immediately
+            stopAllAudioAndRecording();
+            
+            updateStatus('Generating performance report...');
             
             try {
-                // Generate metrics report
                 const reportResponse = await fetch('/api/session/report', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        sessionId,
-                        conversationHistory
+                        sessionId: AppState.interview.sessionId,
+                        conversationHistory: AppState.interview.conversationHistory
                     })
                 });
                 
-                if (reportResponse.ok) {
-                    const report = await reportResponse.json();
-                    displayMetricsReport(report);
-                } else {
-                    throw new Error('Failed to generate report');
-                }
+                if (!reportResponse.ok) throw new Error('Report generation failed');
+                
+                const report = await reportResponse.json();
+                displayMetricsReport(report);
+                
             } catch (error) {
-                console.error('Report generation error:', error);
-                showError('Failed to generate performance report');
+                handleError(error, 'endInterview');
+                // Re-enable buttons on error
+                AppState.ui.endButton.disabled = false;
+                AppState.ui.stopButton.disabled = false;
+                AppState.ui.endButton.style.opacity = '1';
+                AppState.ui.stopButton.style.opacity = '1';
+                AppState.ui.endButton.style.cursor = 'pointer';
+                AppState.ui.stopButton.style.cursor = 'pointer';
             }
             
-            // Reset UI
-            button.classList.remove('active', 'speaking');
-            button.style.transform = 'scale(1)';
-            buttonText.style.display = 'block';
-            buttonText.textContent = 'Begin New Interview';
-            buttonText.classList.remove('fade-out');
-            button.onclick = () => {
-                if (!isInterviewActive) {
-                    // Reset and start new
-                    conversationHistory = [];
-                    responseMetrics = [];
-                    sessionId = null;
-                    hideMetricsReport();
-                    buttonText.textContent = 'Begin Interview';
-                    startInterview();
-                }
-            };
+            resetUI();
+        }
+
+        // ============ STOP INTERVIEW (NO METRICS) ============
+        function stopInterview() {
+            if (!AppState.interview.active) return;
             
-            statusText.classList.remove('visible');
-            endButton.classList.remove('visible');
+            AppState.interview.active = false;
+            AppState.interview.paused = false;
+            
+            // Disable both buttons immediately to prevent double-clicks
+            AppState.ui.endButton.disabled = true;
+            AppState.ui.stopButton.disabled = true;
+            AppState.ui.endButton.style.opacity = '0.5';
+            AppState.ui.stopButton.style.opacity = '0.5';
+            AppState.ui.endButton.style.cursor = 'not-allowed';
+            AppState.ui.stopButton.style.cursor = 'not-allowed';
+            
+            // Stop everything immediately
+            stopAllAudioAndRecording();
+            
+            // Delete session data (no metrics needed)
+            if (AppState.interview.sessionId) {
+                fetch('/api/session/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId: AppState.interview.sessionId })
+                }).catch(e => console.error('Session deletion failed:', e));
+            }
+            
+            // Reset everything
+            AppState.interview.sessionId = null;
+            AppState.interview.interests = [];
+            AppState.interview.conversationHistory = [];
+            
+            resetUI();
+            showSnackbar('Interview stopped', 'info');
         }
 
-        // Update status text
-        function updateStatus(text) {
-            statusText.textContent = text;
-            statusText.classList.add('visible');
+        // ============ STOP ALL AUDIO & RECORDING ============
+        function stopAllAudioAndRecording() {
+            // Abort ongoing TTS request
+            if (AppState.audio.currentAbortController) {
+                AppState.audio.currentAbortController.abort();
+                AppState.audio.currentAbortController = null;
+            }
+            
+            // Stop current audio
+            if (AppState.audio.currentPlayback) {
+                AppState.audio.currentPlayback.pause();
+                AppState.audio.currentPlayback = null;
+            }
+            
+            // Stop recording
+            if (AppState.audio.mediaRecorder && AppState.audio.mediaRecorder.state === 'recording') {
+                AppState.audio.mediaRecorder.stop();
+            }
+            
+            // Stop visualization
+            if (AppState.audio.visualizationFrameId) {
+                cancelAnimationFrame(AppState.audio.visualizationFrameId);
+            }
+            
+            // Reset speech state
+            AppState.speech.isSpeaking = false;
+            AppState.speech.isProcessing = false;
+            AppState.speech.interruptionDetected = false;
+            
+            // Reset button visual
+            AppState.ui.button.classList.remove('active', 'speaking', 'paused');
+            AppState.ui.button.style.transform = 'scale(1)';
         }
 
-        // Text-to-speech using backend
+        // ============ TEXT-TO-SPEECH ============
         async function speakText(text) {
+            if (AppState.interview.paused) return;
+            
             try {
-                button.classList.add('speaking');
+                AppState.ui.button.classList.add('speaking');
+                
+                // Create AbortController for this TTS request so we can cancel it
+                const abortController = new AbortController();
+                AppState.audio.currentAbortController = abortController;
                 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ text })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text }),
+                    signal: abortController.signal // Allow cancellation
                 });
 
-                if (!response.ok) {
-                    throw new Error('TTS failed');
-                }
+                if (!response.ok) throw new Error('TTS failed');
 
                 const audioBlob = await response.blob();
                 const audioUrl = URL.createObjectURL(audioBlob);
                 const audio = new Audio(audioUrl);
                 
-                // Store current audio for interruption detection
-                currentAudio = audio;
-
-                // Create audio context for visualization
-                if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
+                // Set playback speed to make speech faster
+                // 1.0 = normal speed, 1.15 = 15% faster (natural but quicker)
+                audio.playbackRate = 1.15;
                 
-                const source = audioContext.createMediaElementSource(audio);
-                const analyserNode = audioContext.createAnalyser();
+                AppState.audio.currentPlayback = audio;
+
+                const source = AppState.audio.context.createMediaElementSource(audio);
+                const analyserNode = AppState.audio.context.createAnalyser();
                 analyserNode.fftSize = 256;
                 
                 source.connect(analyserNode);
-                analyserNode.connect(audioContext.destination);
+                analyserNode.connect(AppState.audio.context.destination);
                 
-                // Visualize audio in real-time
-                let visualizationFrameId;
-                function visualizeAudio() {
-                    const bufferLength = analyserNode.frequencyBinCount;
-                    const dataArray = new Uint8Array(bufferLength);
-                    analyserNode.getByteFrequencyData(dataArray);
-                    
-                    // Calculate average volume
-                    const average = dataArray.reduce((a, b) => a + b) / bufferLength;
-                    
-                    // Scale button based on audio level (smoother, more subtle)
-                    const scale = 1 + (average / 255) * 0.25; // Max 1.25x scale
-                    button.style.transform = `scale(${scale})`;
-                    
-                    if (currentAudio && !currentAudio.paused && !currentAudio.ended) {
-                        visualizationFrameId = requestAnimationFrame(visualizeAudio);
-                    }
-                }
+                visualizeAudio(analyserNode);
 
                 return new Promise((resolve, reject) => {
-                    audio.onplay = () => {
-                        visualizeAudio();
-                    };
-                    
                     audio.onended = () => {
-                        if (visualizationFrameId) {
-                            cancelAnimationFrame(visualizationFrameId);
-                        }
-                        button.classList.remove('speaking');
-                        button.style.transform = 'scale(1)';
-                        URL.revokeObjectURL(audioUrl);
-                        currentAudio = null;
+                        cleanup();
                         resolve();
                     };
                     
                     audio.onerror = () => {
-                        if (visualizationFrameId) {
-                            cancelAnimationFrame(visualizationFrameId);
-                        }
-                        button.classList.remove('speaking');
-                        button.style.transform = 'scale(1)';
-                        currentAudio = null;
+                        cleanup();
                         reject(new Error('Audio playback failed'));
                     };
                     
-                    // If audio is paused (interrupted), resolve early
                     audio.onpause = () => {
-                        if (visualizationFrameId) {
-                            cancelAnimationFrame(visualizationFrameId);
-                        }
-                        if (interruptionDetected) {
-                            button.classList.remove('speaking');
-                            button.style.transform = 'scale(1)';
-                            URL.revokeObjectURL(audioUrl);
+                        if (AppState.interview.paused || AppState.speech.interruptionDetected) {
+                            cleanup();
                             resolve();
                         }
                     };
                     
                     audio.play().catch(err => {
-                        console.error('Audio play error:', err);
-                        if (visualizationFrameId) {
-                            cancelAnimationFrame(visualizationFrameId);
-                        }
-                        button.classList.remove('speaking');
-                        button.style.transform = 'scale(1)';
-                        currentAudio = null;
+                        cleanup();
                         reject(err);
                     });
+                    
+                    function cleanup() {
+                        if (AppState.audio.visualizationFrameId) {
+                            cancelAnimationFrame(AppState.audio.visualizationFrameId);
+                        }
+                        AppState.ui.button.classList.remove('speaking');
+                        AppState.ui.button.style.transform = 'scale(1)';
+                        URL.revokeObjectURL(audioUrl);
+                        AppState.audio.currentPlayback = null;
+                        AppState.audio.currentAbortController = null;
+                    }
                 });
             } catch (error) {
-                console.error('Speech error:', error);
-                button.classList.remove('speaking');
-                button.style.transform = 'scale(1)';
-                currentAudio = null;
-                showError('Speech synthesis error. Please check your connection.');
+                // If aborted due to interruption, that's expected - don't log as error
+                if (error.name === 'AbortError') {
+                    console.log('TTS request aborted (interrupted by user)');
+                } else {
+                    console.error('TTS Error:', error);
+                    handleError(error, 'speakText');
+                }
+                AppState.ui.button.classList.remove('speaking');
+                AppState.ui.button.style.transform = 'scale(1)';
+                AppState.audio.currentPlayback = null;
+                AppState.audio.currentAbortController = null;
                 throw error;
             }
         }
 
-        // Start continuous listening with pause and interruption detection
-        async function startContinuousListening() {
-            if (!isInterviewActive || isProcessing) return;
+        // ============ AUDIO VISUALIZATION ============
+        function visualizeAudio(analyserNode) {
+            const bufferLength = analyserNode.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            let currentScale = 1;
+            const smoothingFactor = 0.15; // Smoother transitions
 
-            try {
-                // First check if we have permission
-                if (navigator.permissions && navigator.permissions.query) {
-                    try {
-                        const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
-                        console.log('Microphone permission status:', permissionStatus.state);
-                        
-                        if (permissionStatus.state === 'denied') {
-                            showError('Microphone blocked. Please click the 🔒 icon in your address bar and allow microphone access, then reload the page.');
-                            updateStatus('Microphone permission required');
-                            return;
-                        }
-                    } catch (permErr) {
-                        console.log('Permission query not supported, proceeding with getUserMedia');
+            function animate() {
+                if (!AppState.audio.currentPlayback || AppState.audio.currentPlayback.paused || AppState.audio.currentPlayback.ended) {
+                    // Smooth return to scale 1
+                    if (currentScale > 1.01) {
+                        currentScale += (1 - currentScale) * 0.2;
+                        AppState.ui.button.style.transform = `scale(${currentScale})`;
+                        AppState.audio.visualizationFrameId = requestAnimationFrame(animate);
+                    } else {
+                        AppState.ui.button.style.transform = 'scale(1)';
                     }
+                    return;
                 }
 
+                analyserNode.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+                
+                // More evident scaling (0.6 instead of 0.25) with smoother easing
+                const targetScale = 1 + (average / 255) * 0.6;
+                
+                // Smooth interpolation between current and target
+                currentScale += (targetScale - currentScale) * smoothingFactor;
+                
+                AppState.ui.button.style.transform = `scale(${currentScale})`;
+                AppState.ui.button.style.transition = 'transform 0.05s ease-out';
+                
+                AppState.audio.visualizationFrameId = requestAnimationFrame(animate);
+            }
+
+            animate();
+        }
+
+        // ============ CONTINUOUS LISTENING ============
+        async function startContinuousListening() {
+            if (!AppState.interview.active || AppState.speech.isProcessing || AppState.interview.paused) return;
+
+            try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
@@ -864,393 +1101,286 @@ IMPORTANT: If the candidate interrupts you or speaks while you're speaking, imme
                     } 
                 });
                 
-                console.log('✅ Microphone access granted');
-                
-                initAudioContext();
-                const source = audioContext.createMediaStreamSource(stream);
-                
-                // Create a separate analyser for microphone input (don't reuse the TTS analyser)
-                const micAnalyser = audioContext.createAnalyser();
+                const source = AppState.audio.context.createMediaStreamSource(stream);
+                const micAnalyser = AppState.audio.context.createAnalyser();
                 micAnalyser.fftSize = 256;
                 source.connect(micAnalyser);
                 
-                // Store reference for speech detection
-                analyser = micAnalyser;
-                
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm'
-                });
-                audioChunks = [];
+                AppState.audio.analyser = micAnalyser;
+                AppState.audio.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                AppState.audio.chunks = [];
 
-                mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
+                AppState.audio.mediaRecorder.ondataavailable = (event) => {
+                    AppState.audio.chunks.push(event.data);
                 };
 
-                mediaRecorder.onstop = async () => {
+                AppState.audio.mediaRecorder.onstop = async () => {
                     stream.getTracks().forEach(track => track.stop());
                     
-                    if (animationFrameId) {
-                        cancelAnimationFrame(animationFrameId);
+                    if (AppState.audio.visualizationFrameId) {
+                        cancelAnimationFrame(AppState.audio.visualizationFrameId);
                     }
-                    button.classList.remove('active');
-                    button.style.transform = 'scale(1)';
+                    AppState.ui.button.classList.remove('active');
+                    AppState.ui.button.style.transform = 'scale(1)';
 
-                    if (!isInterviewActive) return;
+                    if (!AppState.interview.active || AppState.interview.paused) return;
 
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    
-                    // Check if this was an interruption
-                    if (interruptionDetected) {
-                        await handleInterruption(audioBlob);
-                    } else {
-                        await processUserSpeech(audioBlob);
-                    }
+                    const audioBlob = new Blob(AppState.audio.chunks, { type: 'audio/webm' });
+                    await processUserSpeech(audioBlob);
                 };
 
-                updateStatus('Listening... (Speak naturally, I\'ll know when you\'re done)');
-                button.classList.add('active');
-                mediaRecorder.start();
+                updateStatus('Listening...');
+                AppState.ui.button.classList.add('active');
+                AppState.audio.mediaRecorder.start();
                 
-                // Start silence and volume detection
-                detectSpeechAndPauses();
-                
-                // Allow manual submission by clicking
-                button.onclick = () => {
-                    if (mediaRecorder && mediaRecorder.state === 'recording') {
-                        if (silenceDetectionTimer) {
-                            clearTimeout(silenceDetectionTimer);
-                        }
-                        mediaRecorder.stop();
-                        isSpeaking = false;
-                        updateStatus('Processing your response...');
-                    }
-                };
+                detectSpeechAndPauses(micAnalyser);
 
             } catch (error) {
-                console.error('Microphone error:', error);
-                
-                // Detailed error messages
-                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                    showError('Microphone permission denied. Please:\n1. Click the 🔒 icon in your address bar\n2. Allow microphone access\n3. Reload the page (Ctrl/Cmd + R)');
-                    updateStatus('Allow microphone to continue');
-                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                    showError('No microphone found. Please connect a microphone and reload.');
-                    updateStatus('Microphone not detected');
-                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-                    showError('Microphone is being used by another application. Please close other apps using the microphone and reload.');
-                    updateStatus('Microphone in use by another app');
-                } else {
-                    showError(`Microphone error: ${error.message}. Please reload the page and try again.`);
-                    updateStatus('Microphone error');
-                }
-                
-                // Reset interview state
-                isInterviewActive = false;
-                button.classList.remove('active', 'speaking');
-                buttonText.style.display = 'block';
-                buttonText.textContent = 'Begin Interview';
-                buttonText.classList.remove('fade-out');
-                endButton.classList.remove('visible');
+                handleError(error, 'startContinuousListening');
+                resetUI();
             }
         }
-        
-        // Detect speech activity and pauses
-        function detectSpeechAndPauses() {
+
+        // ============ SPEECH DETECTION ============
+        function detectSpeechAndPauses(analyser) {
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-            const speechThreshold = 30; // Adjust based on testing
+            const speechThreshold = 30;
             let consecutiveSilenceFrames = 0;
-            const silenceFramesNeeded = 75; // ~1.5 seconds at 60fps
+            const silenceFramesNeeded = 75; // ~1.25s at 60fps
+            let currentScale = 1;
+            const smoothingFactor = 0.2; // Smooth transitions for user speech
 
             function checkAudioLevel() {
-                if (!isInterviewActive || !mediaRecorder || mediaRecorder.state !== 'recording') {
+                if (!AppState.interview.active || !AppState.audio.mediaRecorder || 
+                    AppState.audio.mediaRecorder.state !== 'recording' || AppState.interview.paused) {
                     return;
                 }
 
                 analyser.getByteFrequencyData(dataArray);
                 const average = dataArray.reduce((a, b) => a + b) / bufferLength;
 
-                // Detect if user is speaking
                 if (average > speechThreshold) {
                     consecutiveSilenceFrames = 0;
                     
-                    if (!isSpeaking) {
-                        isSpeaking = true;
+                    if (!AppState.speech.isSpeaking) {
+                        AppState.speech.isSpeaking = true;
                         
-                        // If interviewer is currently speaking, this is an interruption
-                        if (currentAudio && !currentAudio.paused) {
-                            console.log('Interruption detected!');
-                            interruptionDetected = true;
-                            currentAudio.pause();
-                            currentAudio = null;
-                            button.classList.remove('speaking');
+                        // Interruption detection - abort ongoing TTS request
+                        if (AppState.audio.currentPlayback && !AppState.audio.currentPlayback.paused) {
+                            console.log('User interrupted interviewer - stopping audio');
+                            AppState.speech.interruptionDetected = true;
+                            
+                            // Abort the fetch request if still in progress
+                            if (AppState.audio.currentAbortController) {
+                                AppState.audio.currentAbortController.abort();
+                            }
+                            
+                            // Stop current audio playback
+                            AppState.audio.currentPlayback.pause();
+                            AppState.audio.currentPlayback = null;
+                            AppState.ui.button.classList.remove('speaking');
                         }
                     }
                     
-                    // Visualize speaking
-                    const scale = 1 + (average / 255) * 0.3;
-                    button.style.transform = `scale(${scale})`;
+                    // More evident scaling (0.5 instead of 0.3) with smooth easing
+                    const targetScale = 1 + (average / 255) * 0.5;
+                    currentScale += (targetScale - currentScale) * smoothingFactor;
+                    AppState.ui.button.style.transform = `scale(${currentScale})`;
+                    AppState.ui.button.style.transition = 'transform 0.05s ease-out';
                 } else {
-                    // Silence detected
                     consecutiveSilenceFrames++;
-                    button.style.transform = 'scale(1)';
                     
-                    // After enough silence, stop recording automatically
-                    if (isSpeaking && consecutiveSilenceFrames >= silenceFramesNeeded) {
-                        console.log('Pause detected, processing response');
-                        isSpeaking = false;
-                        if (mediaRecorder && mediaRecorder.state === 'recording') {
-                            mediaRecorder.stop();
+                    // Smooth return to scale 1
+                    currentScale += (1 - currentScale) * 0.15;
+                    AppState.ui.button.style.transform = `scale(${currentScale})`;
+                    
+                    if (AppState.speech.isSpeaking && consecutiveSilenceFrames >= silenceFramesNeeded) {
+                        AppState.speech.isSpeaking = false;
+                        if (AppState.audio.mediaRecorder && AppState.audio.mediaRecorder.state === 'recording') {
+                            AppState.audio.mediaRecorder.stop();
                         }
                         return;
                     }
                 }
 
-                animationFrameId = requestAnimationFrame(checkAudioLevel);
+                AppState.audio.visualizationFrameId = requestAnimationFrame(checkAudioLevel);
             }
 
             checkAudioLevel();
         }
-        
-        // Handle interruption
-        async function handleInterruption(audioBlob) {
-            console.log('Processing interruption...');
-            
-            // Track the interruption
-            if (sessionId) {
-                await fetch('/api/session/track', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        sessionId,
-                        interruptionDetected: true,
-                        metrics: {}
-                    })
-                });
-            }
-            
-            interruptionDetected = false;
-            
-            // Process what user said during interruption
-            await processUserSpeech(audioBlob, true);
-        }
 
-        // Process user speech
-        async function processUserSpeech(audioBlob, wasInterruption = false) {
-            if (isProcessing) return;
-            isProcessing = true;
+        // ============ PROCESS USER SPEECH ============
+        async function processUserSpeech(audioBlob) {
+            if (AppState.speech.isProcessing) return;
+            AppState.speech.isProcessing = true;
 
             try {
-                // Convert audio to text using backend
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'audio.webm');
 
                 const transcriptionResponse = await fetch('/api/stt', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    signal: AbortSignal.timeout(15000)
                 });
 
-                if (!transcriptionResponse.ok) {
-                    throw new Error('Transcription failed');
-                }
+                if (!transcriptionResponse.ok) throw new Error('Transcription failed');
 
                 const transcription = await transcriptionResponse.json();
                 const userText = transcription.text;
-                const speechMetrics = transcription.metrics;
 
                 if (!userText || userText.trim().length === 0) {
                     updateStatus('No speech detected. Please continue...');
-                    isProcessing = false;
+                    AppState.speech.isProcessing = false;
                     setTimeout(() => startContinuousListening(), 1000);
                     return;
                 }
 
-                console.log('User said:', userText);
-                console.log('Speech metrics:', speechMetrics);
-                
-                // Store metrics
-                responseMetrics.push(speechMetrics);
-                
                 // Track metrics
-                if (sessionId) {
-                    await fetch('/api/session/track', {
+                if (AppState.interview.sessionId) {
+                    fetch('/api/session/track', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            sessionId,
-                            metrics: speechMetrics,
-                            interruptionDetected: wasInterruption
+                            sessionId: AppState.interview.sessionId,
+                            metrics: {},
+                            interruptionDetected: AppState.speech.interruptionDetected
                         })
-                    });
+                    }).catch(e => console.error('Tracking failed:', e));
                 }
 
-                // Add to conversation history
-                conversationHistory.push({
+                AppState.interview.conversationHistory.push({
                     role: 'user',
                     content: userText
                 });
 
-                // Get interviewer response
                 updateStatus('Interviewer is thinking...');
                 const interviewerResponse = await getInterviewerResponse();
 
-                console.log('Interviewer responds:', interviewerResponse);
-
-                // Add to conversation history
-                conversationHistory.push({
+                AppState.interview.conversationHistory.push({
                     role: 'assistant',
                     content: interviewerResponse
                 });
 
-                // Speak the response
                 updateStatus('Interviewer is speaking...');
                 await speakText(interviewerResponse);
 
-                // Continue listening
-                isProcessing = false;
-                interruptionDetected = false;
-                setTimeout(() => startContinuousListening(), 500);
+                AppState.speech.isProcessing = false;
+                AppState.speech.interruptionDetected = false;
+                
+                setTimeout(() => startContinuousListening(), 300);
 
             } catch (error) {
-                console.error('Processing error:', error);
-                showError('Error processing response. Retrying...');
-                isProcessing = false;
+                handleError(error, 'processUserSpeech');
+                AppState.speech.isProcessing = false;
                 setTimeout(() => startContinuousListening(), 2000);
             }
         }
 
-        // Get response from GPT-4 via backend
+        // ============ GET INTERVIEWER RESPONSE ============
         async function getInterviewerResponse() {
             try {
+                const systemPrompt = SYSTEM_PROMPT_BASE.replace(
+                    '{INTERESTS}',
+                    `- ${AppState.interview.interests[0]}\n- ${AppState.interview.interests[1]}`
+                );
+
                 const messages = [
                     { role: 'system', content: systemPrompt },
-                    ...conversationHistory
+                    ...AppState.interview.conversationHistory
                 ];
 
                 const response = await fetch('/api/chat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ messages })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        messages,
+                        sessionId: AppState.interview.sessionId 
+                    }),
+                    signal: AbortSignal.timeout(15000)
                 });
 
-                if (!response.ok) {
-                    throw new Error('Chat API request failed');
-                }
+                if (!response.ok) throw new Error('Chat API failed');
 
                 const data = await response.json();
                 return data.choices[0].message.content;
 
             } catch (error) {
-                console.error('API error:', error);
+                handleError(error, 'getInterviewerResponse');
                 return "I apologize, there was a technical issue. Could you please repeat that?";
             }
         }
 
-        // Display metrics report
+        // ============ METRICS DISPLAY ============
         function displayMetricsReport(report) {
             const { analysis, rawMetrics } = report;
             
-            // Create metrics overlay
             const overlay = document.createElement('div');
             overlay.id = 'metricsOverlay';
             overlay.innerHTML = `
                 <div class="metrics-modal">
                     <div class="metrics-header">
-                        <h2>📊 Interview Performance Report</h2>
+                        <h2>Performance Report</h2>
                         <button class="close-metrics" onclick="hideMetricsReport()">×</button>
                     </div>
                     
                     <div class="metrics-content">
                         <div class="metrics-section">
-                            <h3>Overall Scores</h3>
+                            <h3>Scores</h3>
                             <div class="scores-grid">
-                                <div class="score-card">
-                                    <div class="score-label">Content Quality</div>
-                                    <div class="score-value">${analysis.scores.content.score}/10</div>
-                                    <div class="score-bar">
-                                        <div class="score-fill" style="width: ${analysis.scores.content.score * 10}%"></div>
+                                ${Object.entries(analysis.scores).map(([key, data]) => `
+                                    <div class="score-card">
+                                        <div class="score-label">${key}</div>
+                                        <div class="score-value">${data.score}/10</div>
+                                        <div class="score-bar">
+                                            <div class="score-fill" style="width: ${data.score * 10}%"></div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="score-card">
-                                    <div class="score-label">Communication</div>
-                                    <div class="score-value">${analysis.scores.communication.score}/10</div>
-                                    <div class="score-bar">
-                                        <div class="score-fill" style="width: ${analysis.scores.communication.score * 10}%"></div>
-                                    </div>
-                                </div>
-                                <div class="score-card">
-                                    <div class="score-label">Confidence</div>
-                                    <div class="score-value">${analysis.scores.confidence.score}/10</div>
-                                    <div class="score-bar">
-                                        <div class="score-fill" style="width: ${analysis.scores.confidence.score * 10}%"></div>
-                                    </div>
-                                </div>
-                                <div class="score-card">
-                                    <div class="score-label">Knowledge Depth</div>
-                                    <div class="score-value">${analysis.scores.knowledge.score}/10</div>
-                                    <div class="score-bar">
-                                        <div class="score-fill" style="width: ${analysis.scores.knowledge.score * 10}%"></div>
-                                    </div>
-                                </div>
-                                <div class="score-card">
-                                    <div class="score-label">Interview Etiquette</div>
-                                    <div class="score-value">${analysis.scores.etiquette.score}/10</div>
-                                    <div class="score-bar">
-                                        <div class="score-fill" style="width: ${analysis.scores.etiquette.score * 10}%"></div>
-                                    </div>
-                                </div>
+                                `).join('')}
                             </div>
                         </div>
                         
                         <div class="metrics-section">
-                            <h3>📈 Quick Stats</h3>
+                            <h3>Session Data</h3>
                             <div class="stats-grid">
                                 <div class="stat-item">
-                                    <span class="stat-label">Total Responses:</span>
+                                    <span class="stat-label">Responses</span>
                                     <span class="stat-value">${rawMetrics.totalResponses}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Interruptions:</span>
-                                    <span class="stat-value ${rawMetrics.interruptions > 0 ? 'warning' : ''}">${rawMetrics.interruptions}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Avg. Filler Words:</span>
-                                    <span class="stat-value ${rawMetrics.avgFillers > 3 ? 'warning' : ''}">${rawMetrics.avgFillers}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Avg. Repetitions:</span>
-                                    <span class="stat-value ${rawMetrics.avgRepetitions > 2 ? 'warning' : ''}">${rawMetrics.avgRepetitions}</span>
                                 </div>
                             </div>
                         </div>
                         
+                        ${analysis.strengths && analysis.strengths.length > 0 ? `
                         <div class="metrics-section">
-                            <h3>💪 Your Strengths</h3>
+                            <h3>Strengths</h3>
                             <ul class="strengths-list">
-                                ${analysis.strengths.map(s => `<li class="strength-item">✓ ${s}</li>`).join('')}
+                                ${analysis.strengths.map(s => `<li class="strength-item">${s}</li>`).join('')}
                             </ul>
                         </div>
+                        ` : ''}
                         
                         <div class="metrics-section">
-                            <h3>🎯 Areas for Improvement</h3>
+                            <h3>Critical Areas for Improvement</h3>
                             <ul class="improvements-list">
-                                ${analysis.improvements.map(i => `<li class="improvement-item">→ ${i}</li>`).join('')}
+                                ${analysis.improvements.map(i => `<li class="improvement-item">${i}</li>`).join('')}
                             </ul>
                         </div>
                         
                         <div class="metrics-section">
-                            <h3>💬 Detailed Feedback</h3>
-                            ${generateDetailedFeedback(analysis)}
+                            <h3>Detailed Feedback</h3>
+                            <div class="detailed-feedback">
+                                ${Object.entries(analysis.scores).map(([key, data]) => `
+                                    <div class="feedback-item">
+                                        <h4>${key.charAt(0).toUpperCase() + key.slice(1)}</h4>
+                                        <p>${data.feedback}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
                         
                         <div class="metrics-section">
-                            <h3>📝 Overall Impression</h3>
+                            <h3>Overall Assessment</h3>
                             <p class="overall-feedback">${analysis.overall}</p>
                         </div>
                     </div>
@@ -1262,82 +1392,44 @@ IMPORTANT: If the candidate interrupts you or speaks while you're speaking, imme
             `;
             
             document.body.appendChild(overlay);
-            
-            // Animate in
-            setTimeout(() => {
-                overlay.classList.add('visible');
-            }, 100);
+            setTimeout(() => overlay.classList.add('visible'), 100);
         }
-        
-        function generateDetailedFeedback(analysis) {
-            let html = '<div class="detailed-feedback">';
-            
-            for (const [key, data] of Object.entries(analysis.scores)) {
-                html += `
-                    <div class="feedback-item">
-                        <h4>${formatScoreTitle(key)}</h4>
-                        <p>${data.feedback}</p>
-                    </div>
-                `;
-            }
-            
-            if (analysis.detailedNotes) {
-                for (const [key, note] of Object.entries(analysis.detailedNotes)) {
-                    if (note) {
-                        html += `
-                            <div class="feedback-item">
-                                <h4>${formatScoreTitle(key)}</h4>
-                                <p>${note}</p>
-                            </div>
-                        `;
-                    }
-                }
-            }
-            
-            html += '</div>';
-            return html;
-        }
-        
-        function formatScoreTitle(key) {
-            const titles = {
-                'content': 'Content Quality',
-                'communication': 'Communication Skills',
-                'confidence': 'Confidence & Composure',
-                'knowledge': 'Knowledge Depth',
-                'etiquette': 'Interview Etiquette',
-                'fillers': 'Filler Words Usage',
-                'interruptions': 'Interruption Handling',
-                'repetitions': 'Word Repetitions',
-                'pacing': 'Response Pacing'
-            };
-            return titles[key] || key;
-        }
-        
+
         function hideMetricsReport() {
             const overlay = document.getElementById('metricsOverlay');
             if (overlay) {
                 overlay.classList.remove('visible');
-                setTimeout(() => {
-                    overlay.remove();
-                }, 300);
+                setTimeout(() => overlay.remove(), 300);
             }
         }
 
-        // Event listeners
-        button.addEventListener('click', () => {
-            if (!isInterviewActive) {
-                startInterview();
-            }
-        });
+        // ============ UI HELPERS ============
+        function updateStatus(text) {
+            AppState.ui.statusText.textContent = text;
+            AppState.ui.statusText.classList.add('visible');
+        }
 
-        endButton.addEventListener('click', endInterview);
+        function resetUI() {
+            AppState.ui.button.classList.remove('active', 'speaking', 'paused');
+            AppState.ui.button.style.transform = 'scale(1)';
+            AppState.ui.buttonText.style.display = 'block';
+            AppState.ui.buttonText.textContent = 'Begin Interview';
+            AppState.ui.buttonText.classList.remove('fade-out');
+            AppState.ui.statusText.classList.remove('visible');
+            AppState.ui.endButton.classList.remove('visible');
+            AppState.ui.stopButton.classList.remove('visible');
+            
+            // Re-enable buttons
+            AppState.ui.endButton.disabled = false;
+            AppState.ui.stopButton.disabled = false;
+            AppState.ui.endButton.style.opacity = '1';
+            AppState.ui.stopButton.style.opacity = '1';
+            AppState.ui.endButton.style.cursor = 'pointer';
+            AppState.ui.stopButton.style.cursor = 'pointer';
+        }
 
-        // Ensure audio context is resumed on user interaction
-        document.addEventListener('click', () => {
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
-        }, { once: true });
+        // ============ INITIALIZE ON LOAD ============
+        window.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
 </html>
