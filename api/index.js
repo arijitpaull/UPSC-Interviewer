@@ -177,7 +177,7 @@ module.exports = async (req, res) => {
             });
         }
 
-        // ============ CHAT ENDPOINT ============
+
         if (path === '/api/chat' && req.method === 'POST') {
             const { messages, sessionId } = req.body;
             
