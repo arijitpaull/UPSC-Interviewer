@@ -124,13 +124,10 @@ module.exports = async (req, res) => {
                     conversationHistory: []
                 },
                 conversationState: {
-                    hasGreeted: false,
-                    askedIntroduction: false,
                     questionCount: 0,
-                    topicsDiscussed: [],
                     currentTopic: null,
                     questionsOnCurrentTopic: 0,
-                    shouldConclude: false
+                    topicsCovered: []  // ADD THIS
                 }
             });
             
@@ -460,8 +457,14 @@ module.exports = async (req, res) => {
             ];
             
             // Topic switching logic
-            if (!conversationState.currentTopic || conversationState.questionsOnCurrentTopic >= QUESTIONS_PER_TOPIC) {
-                const uncoveredTopics = INTERVIEW_TOPICS.filter(t => !conversationState.topicsCovered.includes(t.name));
+            // Topic switching logic
+if (!conversationState.currentTopic || conversationState.questionsOnCurrentTopic >= QUESTIONS_PER_TOPIC) {
+    // Initialize topicsCovered if undefined
+    if (!conversationState.topicsCovered) {
+        conversationState.topicsCovered = [];
+    }
+    
+    const uncoveredTopics = INTERVIEW_TOPICS.filter(t => !conversationState.topicsCovered.includes(t.name));
                 
                 if (uncoveredTopics.length > 0) {
                     conversationState.currentTopic = uncoveredTopics[0].name;
