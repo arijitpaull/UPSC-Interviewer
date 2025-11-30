@@ -6,20 +6,63 @@ const fetch = require('node-fetch');
 const multer = require('multer');
 
 // Environment variables
+const { createClient } = require('redis');
+
+// Environment variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const INDIAN_VOICE_ID = '43EwOfIMJShg3J9RLxZJ';
 
 // Validate API keys on cold start
 if (!OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY not found! Add it in Vercel environment variables.');
+    console.error('❌ OPENAI_API_KEY not found!');
 }
 if (!ELEVENLABS_API_KEY) {
-    console.error('❌ ELEVENLABS_API_KEY not found! Add it in Vercel environment variables.');
+    console.error('❌ ELEVENLABS_API_KEY not found!');
 }
 
-// In-memory session storage
-const sessions = new Map();
+// Redis client
+let redisClient;
+
+async function getRedisClient() {
+    if (!redisClient) {
+        redisClient = createClient({
+            url: process.env.UPSC_REDIS_URL
+        });
+        redisClient.on('error', (err) => console.error('Redis error:', err));
+        await redisClient.connect();
+    }
+    return redisClient;
+}
+
+async function getSession(sessionId) {
+    try {
+        const client = await getRedisClient();
+        const data = await client.get(`session:${sessionId}`);
+        return data ? JSON.parse(data) : null;
+    } catch (error) {
+        console.error('Redis get error:', error);
+        return null;
+    }
+}
+
+async function setSession(sessionId, data) {
+    try {
+        const client = await getRedisClient();
+        await client.setEx(`session:${sessionId}`, 3600, JSON.stringify(data));
+    } catch (error) {
+        console.error('Redis set error:', error);
+    }
+}
+
+async function deleteSession(sessionId) {
+    try {
+        const client = await getRedisClient();
+        await client.del(`session:${sessionId}`);
+    } catch (error) {
+        console.error('Redis delete error:', error);
+    }
+}
 
 // Multer setup
 const upload = multer({ storage: multer.memoryStorage() });
@@ -74,7 +117,7 @@ module.exports = async (req, res) => {
             const shuffled = allInterests.sort(() => 0.5 - Math.random());
             const sessionInterests = shuffled.slice(0, 2);
             
-            sessions.set(sessionId, {
+            await setSession(sessionId, {
                 interests: sessionInterests,
                 metrics: {
                     responses: [],
@@ -192,8 +235,8 @@ module.exports = async (req, res) => {
                 shouldConclude: false
             };
             
-            if (sessionId && sessions.has(sessionId)) {
-                const session = sessions.get(sessionId);
+            const session = await getSession(sessionId);
+            if (session) {
                 if (!session.conversationState) {
                     session.conversationState = {
                         hasGreeted: false,
@@ -217,8 +260,9 @@ module.exports = async (req, res) => {
                 conversationState.shouldConclude = true;
                 
                 // Update session before concluding
-                if (sessionId && sessions.has(sessionId)) {
-                    sessions.get(sessionId).conversationState = conversationState;
+                if (session) {
+                    session.conversationState = conversationState;
+                    await setSession(sessionId, session);
                 }
                 
                 // Return conclusion message
@@ -412,8 +456,9 @@ CRITICAL:
             conversationState.questionCount++;
             
             // Update session
-            if (sessionId && sessions.has(sessionId)) {
-                sessions.get(sessionId).conversationState = conversationState;
+            if (session) {
+                session.conversationState = conversationState;
+                await setSession(sessionId, session);
             }
             
             // Prepare messages for fine-tuned model
@@ -459,13 +504,13 @@ CRITICAL:
         if (path === '/api/session/track' && req.method === 'POST') {
             const { sessionId, metrics } = req.body;
             
-            if (!sessions.has(sessionId)) {
+            const session = await getSession(sessionId);
+            if (!session) {
                 return res.status(404).json({ error: 'Session not found' });
             }
-            
-            const session = sessions.get(sessionId);
+
             session.metrics.responses.push(metrics);
-            sessions.set(sessionId, session);
+            await setSession(sessionId, session);
             
             return res.status(200).json({ success: true });
         }
@@ -478,10 +523,8 @@ CRITICAL:
                 return res.status(400).json({ error: 'Session ID required' });
             }
             
-            if (sessions.has(sessionId)) {
-                sessions.delete(sessionId);
-                console.log(`Session ${sessionId} deleted (stopped without metrics)`);
-            }
+            await deleteSession(sessionId);
+            console.log(`Session ${sessionId} deleted`);
             
             return res.status(200).json({ success: true });
         }
@@ -490,11 +533,10 @@ CRITICAL:
         if (path === '/api/session/report' && req.method === 'POST') {
             const { sessionId, conversationHistory } = req.body;
             
-            if (!sessions.has(sessionId)) {
+            const session = await getSession(sessionId);
+            if (!session) {
                 return res.status(404).json({ error: 'Session not found' });
-            }
-            
-            const session = sessions.get(sessionId);
+            }   
             const metrics = session.metrics;
             
             // Use GPT-4o to analyze the conversation critically
@@ -606,7 +648,7 @@ Format as JSON:
                     };
                 }
                 
-                sessions.delete(sessionId);
+                await deleteSession(sessionId);
                 
                 return res.status(200).json({
                     analysis,
