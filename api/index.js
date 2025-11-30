@@ -224,48 +224,26 @@ module.exports = async (req, res) => {
         if (path === '/api/chat' && req.method === 'POST') {
             const { messages, sessionId } = req.body;
             
-            // Get session to track conversation state
-            let conversationState = {
-                hasGreeted: false,
-                askedIntroduction: false,
+            const session = await getSession(sessionId);
+            if (!session) {
+                return res.status(404).json({ error: 'Session not found' });
+            }
+        
+            let conversationState = session.conversationState || {
                 questionCount: 0,
-                topicsDiscussed: [],
                 currentTopic: null,
                 questionsOnCurrentTopic: 0,
-                shouldConclude: false
+                topicsCovered: []
             };
             
-            const session = await getSession(sessionId);
-            if (session) {
-                if (!session.conversationState) {
-                    session.conversationState = {
-                        hasGreeted: false,
-                        askedIntroduction: false,
-                        questionCount: 0,
-                        topicsDiscussed: [],
-                        currentTopic: null,
-                        questionsOnCurrentTopic: 0,
-                        shouldConclude: false
-                    };
-                }
-                conversationState = session.conversationState;
-            }
+            const QUESTION_LIMIT = 70;
+            const QUESTIONS_PER_TOPIC = 10;
             
-            // INTERVIEW LIMIT: 60-70 questions (about 15-20 minutes)
-            const QUESTION_LIMIT = 70; // Increased from 25 to 70
-            const QUESTIONS_PER_TOPIC = 10; // Switch topics after ~10 questions
-            
-            // Check if we should conclude the interview
+            // Check if interview should end
             if (conversationState.questionCount >= QUESTION_LIMIT) {
-                conversationState.shouldConclude = true;
+                session.conversationState = conversationState;
+                await setSession(sessionId, session);
                 
-                // Update session before concluding
-                if (session) {
-                    session.conversationState = conversationState;
-                    await setSession(sessionId, session);
-                }
-                
-                // Return conclusion message
                 return res.status(200).json({
                     choices: [{
                         message: {
@@ -277,198 +255,260 @@ module.exports = async (req, res) => {
                 });
             }
             
-            // Define topic rotation
-            const TOPICS = [
-                'aspirations', // Why civil services, IFS preference
-                'international_relations', // Current affairs - wars, conflicts, diplomacy
-                'economics', // Optional subject, debt, inflation, pink tax
-                'literature_philosophy', // Absurdist literature, dystopian themes
-                'social_issues', // Mental health, education, volunteering
-                'administration', // Situational questions, policy implementation
-                'ethics', // Ethical dilemmas, difficult choices
-                'current_affairs_india', // Delhi governance, domestic issues
-                'extracurriculars', // ARTIBUS, MUN, debate, pool
-                'personal_background' // Growing up in East Delhi, challenges faced
+            // COMPREHENSIVE TOPICS - DAF + Current Affairs
+            const INTERVIEW_TOPICS = [
+                {
+                    name: 'IFS Aspiration & Foreign Policy',
+                    guidance: `DAF-based questions:
+        - Why IFS over IAS? What specific aspect of diplomacy attracts you?
+        - How does Economics background help in foreign service?
+        - What makes a good diplomat?
+        
+        Current affairs questions:
+        - India's "multi-alignment" foreign policy - what does strategic autonomy mean today?
+        - How is India managing relationships with US, Russia, and China simultaneously?
+        - India's role in G20 and BRICS - how does this advance Global South interests?
+        - UN Security Council reforms - is India's permanent seat realistic?
+        - As IFS officer, how would you enhance India's soft power abroad?
+        
+        Create follow-ups based on her answers. Probe depth, not memorization.`
+                },
+                {
+                    name: 'International Relations & Diplomacy',
+                    guidance: `Current affairs questions:
+        - India's position on Russia-Ukraine war - diplomatic space for mediation?
+        - Israel-Palestine conflict - should India take a stronger stand?
+        - India-China border tensions - what confidence-building measures are needed?
+        - Indo-Pacific strategy and Quad - implications for India's maritime security?
+        - Recent political changes in Bangladesh/Sri Lanka/Maldives - India's priorities?
+        - Afghanistan situation - impact on India's regional security?
+        - India's Act East Policy - challenges and opportunities in Southeast Asia?
+        - Gulf engagement (UAE, Saudi Arabia) - energy, trade, diaspora issues?
+        
+        Mix DAF context with current events. Ask her VIEW, not just facts.`
+                },
+                {
+                    name: 'Economics & Development',
+                    guidance: `DAF-based questions:
+        - Global debt vulnerabilities (her MUN topic) - key risks for developing economies?
+        - Pink tax debate - impact on women's economic participation?
+        - How to increase women's labour force participation in India?
+        
+        Current affairs questions:
+        - India's 6.5-7% growth rate - policy priorities for next decade?
+        - Making growth inclusive in a high-inequality economy?
+        - Make in India and Atmanirbhar Bharat - assessment of progress?
+        - Fiscal vs monetary policy trade-offs - managing inflation and growth?
+        - Labour and skilling reforms - leveraging demographic dividend?
+        - Balancing environmental sustainability with fastest-growing economy?
+        
+        Connect her Economics optional to real policy debates.`
+                },
+                {
+                    name: 'Governance & Public Administration',
+                    guidance: `Current affairs questions:
+        - Simultaneous elections - implications for federalism?
+        - Civil services reforms - impact on bureaucratic neutrality?
+        - UPSC centenary - evolution and needed reforms?
+        - Lateral entry - strengthens or weakens civil services?
+        - ACR/MSF performance appraisal - adequate for accountability?
+        - Political executive vs bureaucratic autonomy - how to balance?
+        - RTI regime effectiveness - recent trends that concern you?
+        - AI in governance - risks and opportunities?
+        - Freebies vs welfare debate - fiscal prudence and ethics?
+        
+        Test her administrative thinking, not textbook answers.`
+                },
+                {
+                    name: 'Social Issues & Welfare',
+                    guidance: `DAF-based questions:
+        - Mental health campaign you organized - what policy gaps did you see?
+        - Should mental health be covered under insurance mandatorily?
+        - Social media and youth mental health - regulatory measures?
+        
+        Current affairs questions:
+        - Kerala's "poverty-free" status - lessons for other states?
+        - Direct benefit transfers - benefits and concerns?
+        - Gender equality in political representation and workforce - is India doing enough?
+        - Malnutrition and anaemia - effectiveness of current approaches?
+        - Digital divide and digital literacy - how should state handle this?
+        - Urban challenges - housing, congestion, informal employment solutions?
+        
+        Connect her volunteering experience to policy debates.`
+                },
+                {
+                    name: 'Education Policy & Reforms',
+                    guidance: `DAF-based questions:
+        - Volunteering with children - biggest education gaps in underserved communities?
+        - As DM of East Delhi, priority for improving education?
+        - Government vs private schools - bridging quality gap?
+        
+        Current affairs questions:
+        - National Education Policy - assessment of progress and concerns?
+        - Learning outcomes in government schools despite high enrollment?
+        - Technology's role in rural education?
+        - Skilling policy reforms needed?
+        
+        Test practical solutions, not theoretical knowledge.`
+                },
+                {
+                    name: 'Environment & Climate Change',
+                    guidance: `Current affairs questions:
+        - India's climate responsibility vs development needs - how to negotiate?
+        - National Green Hydrogen Mission - potential to transform energy?
+        - Blue Flag beaches - significance for coastal management?
+        - Cities adapting to heatwaves and extreme rainfall - what's needed?
+        - Coal policy vs global decarbonization - need to relook?
+        - Air quality crisis - most critical multi-level interventions?
+        - Climate adaptation in agriculture and water policies?
+        - Carbon markets - realistic role in India's climate strategy?
+        - Development pressures vs environmental clearances - how to handle as civil servant?
+        
+        Balance development and environment - test nuanced thinking.`
+                },
+                {
+                    name: 'Technology, AI & Digital Governance',
+                    guidance: `Current affairs questions:
+        - AI governance principles - what should India's regulatory framework prioritize?
+        - Data protection and privacy in digital economy?
+        - Facial recognition and mass surveillance - should state use widely?
+        - Digital public infrastructure (UPI, Aadhaar) - balancing benefits and rights?
+        - AI divide between urban and rural populations - how to prevent?
+        - Cybersecurity incidents increasing - institutional response needed?
+        - Regulating global tech platforms - should India be stricter?
+        - Keeping pace with rapidly changing technologies as civil servant?
+        
+        Probe her understanding of tech-governance balance.`
+                },
+                {
+                    name: 'Ethics & Integrity in Civil Service',
+                    guidance: `Current affairs questions:
+        - Political pressure in high-profile case - how to handle?
+        - Social media amplifying decisions - how to manage as civil servant?
+        - Remaining non-partisan yet responsive in 24x7 news cycle?
+        - Posted in region with communal tension - steps to restore peace?
+        - Senior asks you to overlook violation - what do you do?
+        - Development vs environment conflict - how to balance?
+        - Whistleblowing vs departmental loyalty - your stance?
+        - National interest vs universal human rights - ethical dilemmas for diplomat?
+        
+        Test character and decision-making under pressure.`
+                },
+                {
+                    name: 'Literature, Philosophy & Governance',
+                    guidance: `DAF-based questions:
+        - Absurdist literature - what appeals to you?
+        - Dystopian themes - relevance to modern governance?
+        - Camus, Kafka, Orwell - lessons for administrators?
+        - Philosophy informing administrative decision-making?
+        
+        Connect her literary interests to ethical governance debates.`
+                },
+                {
+                    name: 'ARTIBUS & Communication Skills',
+                    guidance: `DAF-based questions:
+        - Founded ARTIBUS for public speaking - how does this help in administration?
+        - Communication challenges civil servants face today?
+        - Using public speaking to handle crisis as DM?
+        - MUN Best Delegate - what did you learn?
+        - Debate adjudicator - judging skills in administration?
+        
+        Test how she connects extracurriculars to governance.`
+                },
+                {
+                    name: 'Delhi & East Delhi Context',
+                    guidance: `DAF-based questions:
+        - Growing up in East Delhi - governance challenges observed?
+        - Infrastructure improvements you'd prioritize for East Delhi?
+        - How has your background shaped approach to public service?
+        
+        Current affairs questions:
+        - Delhi governance challenges - what needs reform?
+        - Urban challenges in metros - housing, transport, informal economy?
+        - Women's safety in urban areas - systemic changes needed?
+        
+        Make it personal and policy-relevant.`
+                },
+                {
+                    name: 'Security, Defence & Strategic Issues',
+                    guidance: `Current affairs questions:
+        - India's posture in cyber, space, information warfare domains?
+        - China-Pakistan ties and US-India ties - security implications?
+        - Indo-Pacific militarisation - how should India respond?
+        - Maritime security in Indian Ocean - challenges and responses?
+        - Energy security shaping partnerships with West Asia?
+        - Defence indigenisation and export - part of strategic diplomacy?
+        - Counter-terrorism vs civil liberties - how to balance?
+        - Grey-zone challenges - information ops, cross-border radicalization?
+        
+        Test strategic thinking relevant to IFS role.`
+                },
+                {
+                    name: 'Multilateralism & Global Governance',
+                    guidance: `Current affairs questions:
+        - G20 leadership - India's aspirations and responsibilities?
+        - Global rules on AI, data, digital trade - how should India shape them?
+        - Climate negotiations - where does India position itself?
+        - Reforming IMF and World Bank - India's approach?
+        - BRICS expansion and IPEF, QUAD, SCO - significance?
+        - India's narrative as Global South leader?
+        - Vaccine diplomacy during Covid - assessment?
+        - Rising protectionism - defending India's trade interests?
+        
+        Test her grasp of India's multilateral strategy.`
+                }
             ];
             
-            // Check if we need to switch topics
-            if (conversationState.questionsOnCurrentTopic >= QUESTIONS_PER_TOPIC) {
-                // Time to switch topic
-                conversationState.questionsOnCurrentTopic = 0;
+            // Topic switching logic
+            if (!conversationState.currentTopic || conversationState.questionsOnCurrentTopic >= QUESTIONS_PER_TOPIC) {
+                const uncoveredTopics = INTERVIEW_TOPICS.filter(t => !conversationState.topicsCovered.includes(t.name));
                 
-                // Find a topic we haven't exhausted yet
-                const availableTopics = TOPICS.filter(t => {
-                    const timesAsked = conversationState.topicsDiscussed.filter(asked => asked === t).length;
-                    return timesAsked < 2; // Allow each topic max 2 rotations
-                });
-                
-                if (availableTopics.length > 0) {
-                    // Pick a random new topic
-                    conversationState.currentTopic = availableTopics[Math.floor(Math.random() * availableTopics.length)];
+                if (uncoveredTopics.length > 0) {
+                    conversationState.currentTopic = uncoveredTopics[0].name;
+                    conversationState.questionsOnCurrentTopic = 0;
                 } else {
-                    // All topics exhausted, cycle through randomly
-                    conversationState.currentTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+                    conversationState.currentTopic = INTERVIEW_TOPICS[Math.floor(Math.random() * INTERVIEW_TOPICS.length)].name;
+                    conversationState.questionsOnCurrentTopic = 0;
+                }
+                
+                if (!conversationState.topicsCovered.includes(conversationState.currentTopic)) {
+                    conversationState.topicsCovered.push(conversationState.currentTopic);
                 }
             }
             
-            // Track topic
-            if (!conversationState.currentTopic) {
-                conversationState.currentTopic = 'aspirations'; // Start with aspirations
-            }
-            conversationState.topicsDiscussed.push(conversationState.currentTopic);
-            conversationState.questionsOnCurrentTopic++;
+            // Get current topic guidance
+            const currentTopicData = INTERVIEW_TOPICS.find(t => t.name === conversationState.currentTopic);
             
-            // Build context-aware system message based on current topic and progress
-            let contextMessage = '';
-            
-            if (!conversationState.hasGreeted) {
-                // First interaction - YOU are the interviewer who just greeted Tanya
-                contextMessage = `YOU just greeted the candidate with "Good morning, Tanya. Please introduce yourself."
+            const topicGuidance = `REMEMBER: You are Sameer Shah (interviewer). Tanya Singh is the candidate.
 
-The candidate (Tanya Singh) has now introduced herself. Listen to what she said.
+CURRENT TOPIC: ${conversationState.currentTopic}
 
-YOU are the INTERVIEWER. DO NOT introduce yourself. DO NOT greet her again.
+${currentTopicData.guidance}
 
-Now ask your FIRST substantive question about her ASPIRATIONS:
-- "Why did you choose IFS as your first preference?"
-- "What draws you to the foreign service?"
-- "Why civil services over private sector?"
-
-Remember: YOU are asking questions. SHE is answering.
-
-Keep it SHORT (1 sentence). Question count: ${conversationState.questionCount + 1}/${QUESTION_LIMIT}`;
-                conversationState.hasGreeted = true;
-                conversationState.askedIntroduction = true;
-            } else {
-                // Generate topic-specific questions based on current topic
-                const topicGuidance = {
-                    aspirations: `Topic: ASPIRATIONS & MOTIVATION
-Ask about:
-- Why IFS specifically?
-- Why civil services over private sector?
-- What draws her to diplomacy?
-- If not IFS, will IAS be equally motivating?
-- How does Economics help in foreign service?
-- What does she think makes a good diplomat?`,
-
-                    international_relations: `Topic: INTERNATIONAL RELATIONS & CURRENT AFFAIRS
-Ask about:
-- Russia-Ukraine war - India's position?
-- Israel-Palestine conflict - should India take sides?
-- Indo-Pacific strategy - what's at stake?
-- India-China border tensions - way forward?
-- Global South leadership - is India ready?
-- UNSC reform - India's permanent seat chances?
-- Neighborhood first policy - success or failure?
-- Diaspora diplomacy importance`,
-
-                    economics: `Topic: ECONOMICS (Her Optional Subject)
-Ask about:
-- Global debt vulnerabilities (her MUN topic)
-- India's inflation and unemployment challenges
-- Pink tax and gender economics (her debate topic)
-- Fiscal federalism - states vs center
-- Women's labour force participation - how to increase?
-- Direct vs indirect taxation debate
-- India's economic growth strategy
-- Inequality and inclusive growth`,
-
-                    literature_philosophy: `Topic: LITERATURE & PHILOSOPHY
-Ask about:
-- What appeals about absurdist literature?
-- Dystopian themes - relevance to modern governance?
-- How does literature shape administrative thinking?
-- Philosophical frameworks for policy making
-- Camus, Kafka, Orwell - what do they teach administrators?
-- Ethics from literature`,
-
-                    social_issues: `Topic: SOCIAL ISSUES
-Ask about:
-- Mental health (she organized campaign) - policy gaps?
-- Education for underserved (she volunteers) - what needs fixing?
-- Social media and youth mental health
-- Gender equality - beyond pink tax
-- Youth unemployment solutions
-- NGO vs government - which is more effective?`,
-
-                    administration: `Topic: ADMINISTRATION & GOVERNANCE
-Ask situational questions:
-- As DM of East Delhi, how would you improve education?
-- As MEA officer, handling India-Pakistan tensions?
-- Posted in Naxal-affected district - priorities?
-- Communal riots in your district - immediate steps?
-- Implementing unpopular policy - approach?
-- Conflicting orders from senior - what to do?`,
-
-                    ethics: `Topic: ETHICAL DILEMMAS
-Ask about:
-- Development vs environment - how to balance?
-- Senior asks you to do something unethical - response?
-- Limited resources - who gets priority?
-- Whistleblowing vs loyalty to department
-- Personal values vs public duty
-- Ends justify means - agree or disagree?`,
-
-                    current_affairs_india: `Topic: CURRENT AFFAIRS - INDIA
-Ask about:
-- Delhi governance challenges (her home)
-- New education policy - pros and cons?
-- Women's safety in urban areas
-- Digital India - benefits and concerns?
-- Farm laws controversy - lessons learned?
-- Reservation policy - needs reform?`,
-
-                    extracurriculars: `Topic: EXTRACURRICULARS & ACHIEVEMENTS
-Ask about:
-- Founding ARTIBUS - how does public speaking help in admin?
-- MUN Best Delegate - what did you learn?
-- Debate adjudicator - judging skills in administration?
-- Cue sports (pool) - what does it teach?
-- Vice Head Girl - leadership lessons?
-- Volunteering - why children's education?`,
-
-                    personal_background: `Topic: PERSONAL BACKGROUND & CHALLENGES
-Ask about:
-- Growing up in East Delhi - what did you observe?
-- Single parent household - how did it shape you?
-- Overcoming challenges - specific examples?
-- EWS category - should reservation continue?
-- From SRCC to civil services - journey?
-- What drives you despite difficulties?`
-                };
-                
-                const currentGuidance = topicGuidance[conversationState.currentTopic] || topicGuidance.aspirations;
-                
-                contextMessage = `Question ${conversationState.questionCount + 1}/${QUESTION_LIMIT}
-Current Topic: ${conversationState.currentTopic.toUpperCase().replace('_', ' ')}
-Questions on this topic so far: ${conversationState.questionsOnCurrentTopic}/${QUESTIONS_PER_TOPIC}
-
-${currentGuidance}
-
-CRITICAL:
-- Ask ONE short question (1-2 sentences max)
-- Be formal, probing, and sharp
-- If answer is vague, immediately follow up: "Be specific" or "Give an example"
-- Don't ask what you already know from DAF
-- Switch style: direct → challenging → hypothetical → opinion`;
-            }
+INTERVIEW STRATEGY:
+        - Question ${conversationState.questionsOnCurrentTopic + 1}/10 on this topic
+        - Ask ONE question (1-2 sentences max)
+        - If answer is vague/generic: "Be specific" or "Give an example"
+        - Create intelligent follow-ups based on her response
+        - Mix DAF context with current affairs
+        - Test DEPTH of thinking, not memorization
+        - Challenge assumptions when needed
+        
+        Topics covered: ${conversationState.topicsCovered.join(', ')}
+        Total questions asked: ${conversationState.questionCount}/${QUESTION_LIMIT}`;
             
             conversationState.questionCount++;
+            conversationState.questionsOnCurrentTopic++;
+            session.conversationState = conversationState;
+            await setSession(sessionId, session);
             
-            // Update session
-            if (session) {
-                session.conversationState = conversationState;
-                await setSession(sessionId, session);
-            }
-            
-            // Prepare messages for fine-tuned model
-            const modelMessages = [
-                ...messages.slice(0, 1), // Keep original personality system message
-                { role: 'system', content: contextMessage }, // Add context
-                ...messages.slice(1) // Keep conversation history
+            // Inject topic guidance
+            const messagesWithGuidance = [
+                messages[0], // Original system prompt
+                { role: 'system', content: topicGuidance },
+                ...messages.slice(1)
             ];
             
-            // Use fine-tuned model: ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -476,26 +516,24 @@ CRITICAL:
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: 'ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk', // Fine-tuned UPSC model
-                    messages: modelMessages,
-                    temperature: 0.8, // Balanced for varied but focused questions
-                    max_tokens: 150,
-                    presence_penalty: 0.6,
-                    frequency_penalty: 0.7
-                })
+                    model: 'ft:gpt-4o-mini-2024-07-18:mynd:upsc:ChK3ciZk',
+                    messages: messagesWithGuidance,
+                    temperature: 0.8,
+                    max_tokens: 120,
+                    presence_penalty: 0.4,
+                    frequency_penalty: 0.6
+                }),
+                signal: AbortSignal.timeout(20000)
             });
-
+        
             if (!response.ok) {
                 const error = await response.text();
-                console.error('❌ Chat API error:', response.status, error);
-                console.error('API Key present:', !!OPENAI_API_KEY);
-                console.error('API Key prefix:', OPENAI_API_KEY?.substring(0, 10));
+                console.error('Chat API error:', response.status, error);
                 return res.status(500).json({ 
-                    error: `Chat API error: ${response.status}`,
-                    details: error
+                    error: `Chat API error: ${response.status}`
                 });
             }
-
+        
             const data = await response.json();
             return res.status(200).json(data);
         }

@@ -806,11 +806,39 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
         }
 
         // ============ START INTERVIEW ============
-        async function startInterview() {
-            try {
-                // Check microphone permission first
-                const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                testStream.getTracks().forEach(track => track.stop());
+        // ============ MICROPHONE PERMISSION STORAGE ============
+let permanentMicStream = null;
+
+async function requestMicrophonePermission() {
+    if (permanentMicStream) {
+        return true; // Already have permission
+    }
+    
+    try {
+        permanentMicStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            } 
+        });
+        return true;
+    } catch (error) {
+        console.error('Microphone permission denied:', error);
+        showSnackbar('Microphone access required. Please allow and reload.', 'error');
+        return false;
+    }
+}
+
+// ============ START INTERVIEW ============
+async function startInterview() {
+    try {
+        // Request microphone permission once and store it
+        const hasPermission = await requestMicrophonePermission();
+        if (!hasPermission) {
+            resetUI();
+            return;
+        }
                 
                 // Initialize session
                 const sessionResponse = await fetch(API_BASE + '/api/session/init', {
@@ -835,10 +863,11 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                 AppState.ui.stopButton.classList.add('visible');
                 
                 // Start interview
-                updateStatus('Interviewer is speaking...');
-                await speakText("Good morning, Tanya. Please introduce yourself.");
-                
-                setTimeout(() => startContinuousListening(), 300);
+                updateStatus('Starting interview...');
+const initialResponse = await getInterviewerResponse(true); // Pass true for first message
+await speakText(initialResponse);
+
+setTimeout(() => startContinuousListening(), 300);
                 
             } catch (error) {
                 handleError(error, 'startInterview');
@@ -893,6 +922,8 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
             }
             
             resetUI();
+            cleanupMicrophoneOnExit(); 
+            resetUI();
         }
 
         // ============ STOP INTERVIEW (NO METRICS) ============
@@ -929,6 +960,8 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
             
             resetUI();
             showSnackbar('Interview stopped', 'info');
+            cleanupMicrophoneOnExit(); 
+            resetUI();
         }
 
         // ============ STOP ALL AUDIO & RECORDING ============
@@ -991,7 +1024,7 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                 
                 // Set playback speed to make speech faster
                 // 1.0 = normal speed, 1.15 = 15% faster (natural but quicker)
-                audio.playbackRate = 1.15;
+                audio.playbackRate = 1.0;
                 
                 AppState.audio.currentPlayback = audio;
 
@@ -1094,16 +1127,16 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
 
         // ============ CONTINUOUS LISTENING ============
         async function startContinuousListening() {
-            if (!AppState.interview.active || AppState.speech.isProcessing || AppState.interview.paused) return;
+    if (!AppState.interview.active || AppState.speech.isProcessing || AppState.interview.paused) return;
 
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    } 
-                });
+    try {
+        // Reuse the stored mic stream instead of requesting again
+        if (!permanentMicStream) {
+            const hasPermission = await requestMicrophonePermission();
+            if (!hasPermission) return;
+        }
+        
+        const stream = permanentMicStream;
                 
                 const source = AppState.audio.context.createMediaStreamSource(stream);
                 const micAnalyser = AppState.audio.context.createAnalyser();
@@ -1119,7 +1152,6 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
                 };
 
                 AppState.audio.mediaRecorder.onstop = async () => {
-                    stream.getTracks().forEach(track => track.stop());
                     
                     if (AppState.audio.visualizationFrameId) {
                         cancelAnimationFrame(AppState.audio.visualizationFrameId);
@@ -1149,9 +1181,9 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
         function detectSpeechAndPauses(analyser) {
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-            const speechThreshold = 30;
+            const speechThreshold = 25;
             let consecutiveSilenceFrames = 0;
-            const silenceFramesNeeded = 75; // ~1.25s at 60fps
+            const silenceFramesNeeded = 120; // ~1.25s at 60fps
             let currentScale = 1;
             const smoothingFactor = 0.2; // Smooth transitions for user speech
 
@@ -1283,39 +1315,86 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
         }
 
         // ============ GET INTERVIEWER RESPONSE ============
-        async function getInterviewerResponse() {
-            try {
-                const systemPrompt = SYSTEM_PROMPT_BASE.replace(
-                    '{INTERESTS}',
-                    `- ${AppState.interview.interests[0]}\n- ${AppState.interview.interests[1]}`
-                );
+        async function getInterviewerResponse(isFirstMessage = false) {
+    try {
+        const systemPrompt = `You are Sameer Shah, a 43-year-old retired IFS officer conducting a UPSC personality test interview.
 
-                const messages = [
-                    { role: 'system', content: systemPrompt },
-                    ...AppState.interview.conversationHistory
-                ];
+YOUR IDENTITY:
+- Name: Sameer Shah
+- Age: 43 years old
+- Retired Indian Foreign Service (IFS) officer
+- Served in diplomatic missions across Europe and Southeast Asia
+- Known for being formal, calm, intellectually rigorous
+- Now serving as UPSC Interview Board Member at Dholpur House
 
-                const response = await fetch(API_BASE + '/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        messages,
-                        sessionId: AppState.interview.sessionId 
-                    }),
-                    signal: AbortSignal.timeout(15000)
-                });
+THE CANDIDATE YOU'RE INTERVIEWING:
+- Name: Tanya Singh
+- Roll Number: 08XXXX (candidate number)
+- Age: 23 years old
 
-                if (!response.ok) throw new Error('Chat API failed');
+YOUR STYLE:
+- Ask sharp, probing questions (1-2 sentences max)
+- Challenge vague or generic answers immediately
+- Switch topics to test breadth and adaptability
+- Never praise or encourage - maintain professional distance
+- Speak formally but naturally
 
-                const data = await response.json();
-                return data.choices[0].message.content;
+WHAT YOU ALREADY KNOW (don't ask these):
+- Name: Tanya Singh, 23 years old
+- From: New Ashok Nagar, East Delhi
+- Education: B.A. Economics (Hons), SRCC, Delhi University (8.77 CGPA)
+- Optional Subject: Economics
+- Top Service Choice: Indian Foreign Service (IFS)
+- Background: Single parent household, father deceased
+- Achievements: MUN Best Delegate, Founded ARTIBUS platform, Mental health campaign organizer
+- Hobbies: Absurdist literature, volunteering with children, cue sports (pool)
 
-            } catch (error) {
-                handleError(error, 'getInterviewerResponse');
-                return "I apologize, there was a technical issue. Could you please repeat that?";
-            }
+FOCUS YOUR QUESTIONS ON:
+- Why IFS specifically? Why civil services?
+- Current affairs: Russia-Ukraine, Israel-Palestine, India-China tensions, Global South leadership
+- Economics: Inflation, fiscal federalism, pink tax, women's workforce participation
+- Ethics and governance: Situational questions, policy implementation challenges
+- Her interests: Absurdist literature, mental health advocacy, education volunteering
+
+REMEMBER:
+- You're interviewing HER. She answers. You ask.
+- If she's vague: "Be more specific" or "Give me an example"
+- Keep it short, sharp, substantive`;
+
+        let messages = [
+            { role: 'system', content: systemPrompt }
+        ];
+
+        if (isFirstMessage) {
+            // First message - instruct to greet and ask for introduction
+            messages.push({
+                role: 'user',
+                content: 'Begin the interview. Greet Tanya formally and ask her to introduce herself briefly.'
+            });
+        } else {
+            messages = messages.concat(AppState.interview.conversationHistory);
         }
 
+        const response = await fetch(API_BASE + '/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                messages,
+                sessionId: AppState.interview.sessionId 
+            }),
+            signal: AbortSignal.timeout(15000)
+        });
+
+        if (!response.ok) throw new Error('Chat API failed');
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+
+    } catch (error) {
+        handleError(error, 'getInterviewerResponse');
+        return "I apologize, there was a technical issue. Could you please repeat that?";
+    }
+}
         // ============ METRICS DISPLAY ============
         function displayMetricsReport(report) {
             const { analysis, rawMetrics } = report;
@@ -1412,6 +1491,14 @@ You already know all that from her DAF. Ask about IDEAS, OPINIONS, POLICIES, CUR
             AppState.ui.statusText.textContent = text;
             AppState.ui.statusText.classList.add('visible');
         }
+
+        function cleanupMicrophoneOnExit() {
+    // Only cleanup mic when completely done with interview
+    if (permanentMicStream) {
+        permanentMicStream.getTracks().forEach(track => track.stop());
+        permanentMicStream = null;
+    }
+}
 
         function resetUI() {
             AppState.ui.button.classList.remove('active', 'speaking', 'paused');
